@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:sensors_plus/sensors_plus.dart';
 import '../services/telemetry_service.dart';
+import '../theme/app_theme.dart';
+import '../widgets/neumorphic_container.dart';
 
 class TelemetryScreen extends StatefulWidget {
   const TelemetryScreen({super.key});
@@ -13,13 +15,13 @@ class TelemetryScreen extends StatefulWidget {
 
 class _TelemetryScreenState extends State<TelemetryScreen> {
   final TelemetryService _telemetryService = TelemetryService();
-  
+
   // Sensor Data
   AccelerometerEvent? _accelerometerEvent;
   GyroscopeEvent? _gyroscopeEvent;
   UserAccelerometerEvent? _userAccelerometerEvent;
   Position? _currentPosition;
-  
+
   // Subscriptions
   StreamSubscription? _accelSubscription;
   StreamSubscription? _gyroSubscription;
@@ -43,7 +45,9 @@ class _TelemetryScreenState extends State<TelemetryScreen> {
     } else {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Location permission needed for telemetry')),
+          const SnackBar(
+            content: Text('Location permission needed for telemetry'),
+          ),
         );
       }
     }
@@ -63,7 +67,9 @@ class _TelemetryScreenState extends State<TelemetryScreen> {
       });
     });
 
-    _userAccelSubscription = _telemetryService.userAccelerometerStream.listen((event) {
+    _userAccelSubscription = _telemetryService.userAccelerometerStream.listen((
+      event,
+    ) {
       setState(() {
         _userAccelerometerEvent = event;
       });
@@ -80,11 +86,11 @@ class _TelemetryScreenState extends State<TelemetryScreen> {
     // Simple threshold logic for demonstration
     // In a real app, this would be a complex ML model (HAR)
     double magnitude = (event.x.abs() + event.y.abs() + event.z.abs());
-    
-    // Standard gravity is ~9.8 m/s^2. 
+
+    // Standard gravity is ~9.8 m/s^2.
     // Significant deviation might indicate a fall or crash.
     // This is a VERY basic simplification.
-    if (magnitude > 30.0) { 
+    if (magnitude > 30.0) {
       setState(() {
         _isHighRiskMovement = true;
         _riskMessage = "CRITICAL IMPACT DETECTED";
@@ -99,11 +105,11 @@ class _TelemetryScreenState extends State<TelemetryScreen> {
         }
       });
     } else if (magnitude > 15.0) {
-       setState(() {
+      setState(() {
         _riskMessage = "High Movement";
       });
     } else {
-       setState(() {
+      setState(() {
         _riskMessage = "Normal";
       });
     }
@@ -121,9 +127,15 @@ class _TelemetryScreenState extends State<TelemetryScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppTheme.background,
       appBar: AppBar(
-        title: const Text('Telemetry & Risk Monitor'),
-        backgroundColor: _isHighRiskMovement ? Colors.red : Colors.blue,
+        title: const Text(
+          'Telemetry & Risk Monitor',
+          style: TextStyle(color: AppTheme.textDark),
+        ),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        iconTheme: const IconThemeData(color: AppTheme.textDark),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
@@ -131,35 +143,35 @@ class _TelemetryScreenState extends State<TelemetryScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _buildStatusCard(),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
             _buildLocationCard(),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
             _buildSensorCard(
               title: "Accelerometer (Gravity)",
-              data: _accelerometerEvent != null 
+              data: _accelerometerEvent != null
                   ? "X: ${_accelerometerEvent!.x.toStringAsFixed(2)}\n"
-                    "Y: ${_accelerometerEvent!.y.toStringAsFixed(2)}\n"
-                    "Z: ${_accelerometerEvent!.z.toStringAsFixed(2)}"
+                        "Y: ${_accelerometerEvent!.y.toStringAsFixed(2)}\n"
+                        "Z: ${_accelerometerEvent!.z.toStringAsFixed(2)}"
                   : "Waiting...",
               icon: Icons.speed,
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
             _buildSensorCard(
               title: "User Accelerometer (No Gravity)",
-              data: _userAccelerometerEvent != null 
+              data: _userAccelerometerEvent != null
                   ? "X: ${_userAccelerometerEvent!.x.toStringAsFixed(2)}\n"
-                    "Y: ${_userAccelerometerEvent!.y.toStringAsFixed(2)}\n"
-                    "Z: ${_userAccelerometerEvent!.z.toStringAsFixed(2)}"
+                        "Y: ${_userAccelerometerEvent!.y.toStringAsFixed(2)}\n"
+                        "Z: ${_userAccelerometerEvent!.z.toStringAsFixed(2)}"
                   : "Waiting...",
               icon: Icons.directions_run,
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
             _buildSensorCard(
               title: "Gyroscope",
-              data: _gyroscopeEvent != null 
+              data: _gyroscopeEvent != null
                   ? "X: ${_gyroscopeEvent!.x.toStringAsFixed(2)}\n"
-                    "Y: ${_gyroscopeEvent!.y.toStringAsFixed(2)}\n"
-                    "Z: ${_gyroscopeEvent!.z.toStringAsFixed(2)}"
+                        "Y: ${_gyroscopeEvent!.y.toStringAsFixed(2)}\n"
+                        "Z: ${_gyroscopeEvent!.z.toStringAsFixed(2)}"
                   : "Waiting...",
               icon: Icons.rotate_right,
             ),
@@ -170,78 +182,136 @@ class _TelemetryScreenState extends State<TelemetryScreen> {
   }
 
   Widget _buildStatusCard() {
-    return Card(
-      color: _isHighRiskMovement ? Colors.red.shade100 : Colors.green.shade100,
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            Text(
-              "SYSTEM STATUS",
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                color: _isHighRiskMovement ? Colors.red : Colors.green,
-              ),
+    return NeumorphicContainer(
+      color: _isHighRiskMovement ? Colors.red.shade100 : AppTheme.background,
+      child: Column(
+        children: [
+          Text(
+            "SYSTEM STATUS",
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: _isHighRiskMovement ? Colors.red : AppTheme.primary,
+              letterSpacing: 1.5,
             ),
-            const SizedBox(height: 8),
-            Text(
-              _riskMessage,
-              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-              textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 12),
+          Text(
+            _riskMessage,
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: _isHighRiskMovement ? Colors.red : AppTheme.textDark,
             ),
-          ],
-        ),
+            textAlign: TextAlign.center,
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildLocationCard() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Row(
-              children: [
-                Icon(Icons.location_on, color: Colors.blue),
-                SizedBox(width: 8),
-                Text("Geolocation", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              ],
+    return NeumorphicContainer(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.location_on, color: AppTheme.primary),
+              SizedBox(width: 12),
+              Text(
+                "Geolocation",
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: AppTheme.textDark,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          const Divider(color: Colors.white),
+          const SizedBox(height: 12),
+          if (_currentPosition != null) ...[
+            _buildDataRow("Latitude", "${_currentPosition!.latitude}"),
+            _buildDataRow("Longitude", "${_currentPosition!.longitude}"),
+            _buildDataRow(
+              "Altitude",
+              "${_currentPosition!.altitude.toStringAsFixed(1)} m",
             ),
-            const Divider(),
-            if (_currentPosition != null) ...[
-              Text("Latitude: ${_currentPosition!.latitude}"),
-              Text("Longitude: ${_currentPosition!.longitude}"),
-              Text("Altitude: ${_currentPosition!.altitude.toStringAsFixed(1)} m"),
-              Text("Speed: ${_currentPosition!.speed.toStringAsFixed(1)} m/s"),
-              Text("Accuracy: ${_currentPosition!.accuracy.toStringAsFixed(1)} m"),
-            ] else
-              const Text("Acquiring GPS signal..."),
-          ],
-        ),
+            _buildDataRow(
+              "Speed",
+              "${_currentPosition!.speed.toStringAsFixed(1)} m/s",
+            ),
+            _buildDataRow(
+              "Accuracy",
+              "${_currentPosition!.accuracy.toStringAsFixed(1)} m",
+            ),
+          ] else
+            const Text(
+              "Acquiring GPS signal...",
+              style: TextStyle(color: AppTheme.textLight),
+            ),
+        ],
       ),
     );
   }
 
-  Widget _buildSensorCard({required String title, required String data, required IconData icon}) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(icon, color: Colors.orange),
-                const SizedBox(width: 8),
-                Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              ],
+  Widget _buildSensorCard({
+    required String title,
+    required String data,
+    required IconData icon,
+  }) {
+    return NeumorphicContainer(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, color: Colors.orange),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.textDark,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          const Divider(color: Colors.white),
+          const SizedBox(height: 12),
+          Text(
+            data,
+            style: const TextStyle(
+              fontFamily: 'monospace',
+              fontSize: 14,
+              color: AppTheme.textDark,
             ),
-            const Divider(),
-            Text(data, style: const TextStyle(fontFamily: 'monospace', fontSize: 16)),
-          ],
-        ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDataRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(color: AppTheme.textLight)),
+          Text(
+            value,
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              color: AppTheme.textDark,
+            ),
+          ),
+        ],
       ),
     );
   }

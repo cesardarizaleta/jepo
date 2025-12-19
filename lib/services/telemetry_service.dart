@@ -4,9 +4,11 @@ import 'package:sensors_plus/sensors_plus.dart';
 
 class TelemetryService {
   // Streams for sensors
-  Stream<AccelerometerEvent> get accelerometerStream => accelerometerEventStream();
+  Stream<AccelerometerEvent> get accelerometerStream =>
+      accelerometerEventStream();
   Stream<GyroscopeEvent> get gyroscopeStream => gyroscopeEventStream();
-  Stream<UserAccelerometerEvent> get userAccelerometerStream => userAccelerometerEventStream();
+  Stream<UserAccelerometerEvent> get userAccelerometerStream =>
+      userAccelerometerEventStream();
 
   // Stream for location
   Stream<Position> get locationStream {
@@ -26,7 +28,7 @@ class TelemetryService {
     serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
       // Location services are not enabled don't continue
-      // accessing the position and request users of the 
+      // accessing the position and request users of the
       // App to enable the location services.
       return false;
     }
@@ -37,17 +39,17 @@ class TelemetryService {
       if (permission == LocationPermission.denied) {
         // Permissions are denied, next time you could try
         // requesting permissions again (this is also where
-        // Android's shouldShowRequestPermissionRationale 
+        // Android's shouldShowRequestPermissionRationale
         // returned true. According to Android guidelines
         // your App should show an explanatory UI now.
         return false;
       }
     }
-    
+
     if (permission == LocationPermission.deniedForever) {
-      // Permissions are denied forever, handle appropriately. 
+      // Permissions are denied forever, handle appropriately.
       return false;
-    } 
+    }
 
     return true;
   }
