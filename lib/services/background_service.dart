@@ -5,6 +5,7 @@ import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:sensors_plus/sensors_plus.dart';
+import 'sms_service.dart';
 
 // Notification Channel IDs
 const String monitoringChannelId = 'jepo_monitoring';
@@ -140,11 +141,14 @@ void onStart(ServiceInstance service) async {
     // foregroundNotificationConfig: ... // We handle notification manually
   );
 
+  Position? lastKnownPosition;
+
   final locationStream = Geolocator.getPositionStream(
     locationSettings: locationSettings,
   );
 
   locationStream.listen((Position position) {
+    lastKnownPosition = position;
     // Here we would process the location (Graph Theory, Safe Zones)
     // For now, we just update the notification to show we are alive
 
@@ -196,6 +200,13 @@ void onStart(ServiceInstance service) async {
           "type": "IMPACT",
           "magnitude": magnitude,
         });
+        
+        // Send Twilio SMS Alert
+        String alertBody = "EMERGENCY: Impact detected by Jepo! User might need help.";
+        if (lastKnownPosition != null) {
+          alertBody += "\nLocation: https://maps.google.com/?q=${lastKnownPosition!.latitude},${lastKnownPosition!.longitude}";
+        }
+        SmsService.sendEmergencyAlerts(alertBody);
 
         // Update notification to warn user
         try {
