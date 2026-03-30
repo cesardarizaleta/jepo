@@ -1,0 +1,865 @@
+{
+  "info": {
+    "_postman_id": "6a0ad235-bff3-4f79-9db8-68db18c98a81",
+    "name": "Jepo API - Auth First",
+    "description": "Coleccion completa de API JEPO con flujo auth-first. Todas las rutas usan x-api-key. Las rutas protegidas ademas requieren Authorization Bearer JWT.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "37978462"
+  },
+  "item": [
+    {
+      "name": "00 - Health y Docs",
+      "description": "Endpoints operativos y de documentacion.",
+      "item": [
+        {
+          "name": "Health",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "health"
+              ]
+            },
+            "description": "Verifica estado de la API."
+          },
+          "response": []
+        },
+        {
+          "name": "Swagger JSON",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/docs-json",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "docs-json"
+              ]
+            },
+            "description": "Obtiene OpenAPI JSON."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "01 - Auth",
+      "description": "Registro, login y sesion del usuario.",
+      "item": [
+        {
+          "name": "Register",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 201/200', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});",
+                  "let json;",
+                  "try { json = pm.response.json(); } catch (e) { json = null; }",
+                  "if (json && json.data) {",
+                  "  if (json.data.access_token) { pm.environment.set('jwt', json.data.access_token); }",
+                  "  if (json.data.user && json.data.user.id) { pm.environment.set('userId', String(json.data.user.id)); }",
+                  "  if (json.data.user && json.data.user.email) { pm.environment.set('email', json.data.user.email); }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-api-key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"{{nombre}}\",\n  \"apellido\": \"{{apellido}}\",\n  \"email\": \"{{email}}\",\n  \"telefono\": \"{{telefono}}\",\n  \"password\": \"{{password}}\",\n  \"token_fcm\": \"{{tokenFcm}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "register"
+              ]
+            },
+            "description": "Crea usuario y devuelve access_token."
+          },
+          "response": []
+        },
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "let json;",
+                  "try { json = pm.response.json(); } catch (e) { json = null; }",
+                  "if (json && json.data) {",
+                  "  if (json.data.access_token) { pm.environment.set('jwt', json.data.access_token); }",
+                  "  if (json.data.user && json.data.user.id) { pm.environment.set('userId', String(json.data.user.id)); }",
+                  "  if (json.data.user && json.data.user.email) { pm.environment.set('email', json.data.user.email); }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-api-key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Inicia sesion y actualiza variable jwt."
+          },
+          "response": []
+        },
+        {
+          "name": "Me",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{apiKey}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "me"
+              ]
+            },
+            "description": "Valida token y devuelve perfil actual."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "02 - Usuarios",
+      "description": "CRUD administrativo de usuarios (actualmente con API key).",
+      "item": [
+        {
+          "name": "Crear usuario",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "let json;",
+                  "try { json = pm.response.json(); } catch (e) { json = null; }",
+                  "if (json && json.data && json.data.id) { pm.environment.set('userId', String(json.data.id)); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-api-key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"{{nombre}}\",\n  \"apellido\": \"{{apellido}}\",\n  \"email\": \"{{emailAlt}}\",\n  \"telefono\": \"{{telefonoAlt}}\",\n  \"password\": \"{{password}}\",\n  \"token_fcm\": \"{{tokenFcm}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/usuarios",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "usuarios"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Listar usuarios",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/usuarios",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "usuarios"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Obtener usuario por ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/usuarios/{{userId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "usuarios",
+                "{{userId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Actualizar usuario",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-api-key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"{{nombre}}\",\n  \"apellido\": \"{{apellido}}\",\n  \"telefono\": \"{{telefono}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/usuarios/{{userId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "usuarios",
+                "{{userId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Actualizar token FCM",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-api-key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token_fcm\": \"{{tokenFcm}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/usuarios/{{userId}}/token-fcm",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "usuarios",
+                "{{userId}}",
+                "token-fcm"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Eliminar usuario",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/usuarios/{{userId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "usuarios",
+                "{{userId}}"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "03 - Contactos de Emergencia",
+      "description": "Rutas protegidas por JWT. El owner se toma del token.",
+      "item": [
+        {
+          "name": "Crear contacto",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "let json;",
+                  "try { json = pm.response.json(); } catch (e) { json = null; }",
+                  "if (json && json.data && json.data.id) { pm.environment.set('contactId', String(json.data.id)); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-api-key",
+                "value": "{{apiKey}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre_contacto\": \"{{contactoNombre}}\",\n  \"telefono_contacto\": \"{{contactoTelefono}}\",\n  \"prioridad\": {{contactoPrioridad}}\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/usuarios/contactos",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "usuarios",
+                "contactos"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Listar contactos",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{apiKey}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/usuarios/contactos",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "usuarios",
+                "contactos"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Obtener contacto por ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{apiKey}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/usuarios/contactos/{{contactId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "usuarios",
+                "contactos",
+                "{{contactId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Actualizar contacto",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-api-key",
+                "value": "{{apiKey}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"telefono_contacto\": \"{{contactoTelefonoAlt}}\",\n  \"prioridad\": 2\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/usuarios/contactos/{{contactId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "usuarios",
+                "contactos",
+                "{{contactId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Eliminar contacto",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{apiKey}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/usuarios/contactos/{{contactId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "usuarios",
+                "contactos",
+                "{{contactId}}"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "04 - Alertas de Incidentes",
+      "description": "Rutas protegidas por JWT. Las alertas quedan asociadas al usuario autenticado.",
+      "item": [
+        {
+          "name": "Crear alerta proactiva",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "let json;",
+                  "try { json = pm.response.json(); } catch (e) { json = null; }",
+                  "if (json && json.data && json.data.alerta && json.data.alerta.id) {",
+                  "  pm.environment.set('alertId', String(json.data.alerta.id));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-api-key",
+                "value": "{{apiKey}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"latitud\": {{latitud}},\n  \"longitud\": {{longitud}},\n  \"url_audio_contexto\": \"{{audioUrl}}\",\n  \"fecha_hora\": \"{{fechaHoraIso}}\",\n  \"es_proactiva\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/alertas",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "alertas"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Crear alerta no proactiva",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-api-key",
+                "value": "{{apiKey}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"latitud\": {{latitud}},\n  \"longitud\": {{longitud}},\n  \"url_audio_contexto\": \"{{audioUrl}}\",\n  \"es_proactiva\": false\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/alertas",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "alertas"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Listar alertas",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{apiKey}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/alertas",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "alertas"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Obtener alerta por ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{apiKey}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/alertas/{{alertId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "alertas",
+                "{{alertId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Actualizar alerta",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-api-key",
+                "value": "{{apiKey}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"es_proactiva\": false\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/alertas/{{alertId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "alertas",
+                "{{alertId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Eliminar alerta",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{apiKey}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/alertas/{{alertId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "alertas",
+                "{{alertId}}"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:9002"
+    },
+    {
+      "key": "apiKey",
+      "value": "change_me_api_key"
+    },
+    {
+      "key": "jwt",
+      "value": ""
+    },
+    {
+      "key": "userId",
+      "value": "1"
+    },
+    {
+      "key": "contactId",
+      "value": "1"
+    },
+    {
+      "key": "alertId",
+      "value": "1"
+    },
+    {
+      "key": "nombre",
+      "value": "Cesar"
+    },
+    {
+      "key": "apellido",
+      "value": "Lopez"
+    },
+    {
+      "key": "email",
+      "value": "cesar@example.com"
+    },
+    {
+      "key": "telefono",
+      "value": "+56999999999"
+    },
+    {
+      "key": "password",
+      "value": "Passw0rd!Segura"
+    },
+    {
+      "key": "tokenFcm",
+      "value": "fcm_device_token_123456"
+    },
+    {
+      "key": "emailAlt",
+      "value": "cesar.alt@example.com"
+    },
+    {
+      "key": "telefonoAlt",
+      "value": "+56988887777"
+    },
+    {
+      "key": "contactoNombre",
+      "value": "Maria Perez"
+    },
+    {
+      "key": "contactoTelefono",
+      "value": "+56912345678"
+    },
+    {
+      "key": "contactoTelefonoAlt",
+      "value": "+56911112222"
+    },
+    {
+      "key": "contactoPrioridad",
+      "value": "1"
+    },
+    {
+      "key": "latitud",
+      "value": "-33.43719212"
+    },
+    {
+      "key": "longitud",
+      "value": "-70.65058345"
+    },
+    {
+      "key": "audioUrl",
+      "value": "https://storage.example.com/audio/12345.mp3"
+    },
+    {
+      "key": "fechaHoraIso",
+      "value": "2026-03-29T14:00:00Z"
+    }
+  ]
+}

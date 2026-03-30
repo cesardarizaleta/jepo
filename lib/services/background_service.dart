@@ -5,7 +5,9 @@ import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:sensors_plus/sensors_plus.dart';
-import 'sms_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'alert_queue_service.dart';
+import 'api_client.dart';
 
 // Notification Channel IDs
 const String monitoringChannelId = 'jepo_monitoring';
@@ -97,6 +99,13 @@ void onStart(ServiceInstance service) async {
 
   await flutterLocalNotificationsPlugin.initialize(initializationSettings);
 
+  try {
+    await initApi();
+    await AlertQueueService(appApi).processQueue();
+  } catch (e) {
+    debugPrint('Background API init failed: $e');
+  }
+
   // Listen for stop command
   service.on('stopService').listen((event) {
     service.stopSelf();
@@ -186,13 +195,39 @@ void onStart(ServiceInstance service) async {
   // Accelerometer for falls/impacts
   // We can throttle this if needed, but for impact detection we need real-time.
   // The logic is lightweight (simple math).
+  // Persistent key to store the last impact timestamp, in UTC ISO8601
+  const String lastImpactKey = 'jepo_last_impact_at';
+  const int throttleWindowSeconds = 3;
+
   accelerometerEventStream().listen(
-    (AccelerometerEvent event) {
+    (AccelerometerEvent event) async {
       // Calculate G-force
       double magnitude = (event.x.abs() + event.y.abs() + event.z.abs());
 
       // Simple Threshold for "Risk" (>30 m/s^2 is roughly 3G)
       if (magnitude > 30.0) {
+        // Debounce/Throttle sensor-triggered alerts: ignore impacts that occur
+        // within `throttleWindowSeconds` of the last accepted impact.
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          final lastImpactStr = prefs.getString(lastImpactKey);
+          final now = DateTime.now().toUtc();
+          if (lastImpactStr != null && lastImpactStr.isNotEmpty) {
+            try {
+              final lastImpact = DateTime.parse(lastImpactStr).toUtc();
+              if (now.difference(lastImpact) <
+                  Duration(seconds: throttleWindowSeconds)) {
+                debugPrint(
+                  'BackgroundService: impact ignored due to throttle (lastImpact=$lastImpact)',
+                );
+                return;
+              }
+            } catch (_) {}
+          }
+          await prefs.setString(lastImpactKey, now.toIso8601String());
+        } catch (e) {
+          debugPrint('BackgroundService: error reading/writing lastImpact: $e');
+        }
         // TRIGGER ALERT!
         // In a real app, this would call the Alert Module
 
@@ -200,13 +235,23 @@ void onStart(ServiceInstance service) async {
           "type": "IMPACT",
           "magnitude": magnitude,
         });
-        
-        // Send Twilio SMS Alert
-        String alertBody = "EMERGENCY: Impact detected by Jepo! User might need help.";
+
+        // Try API alert first, or queue locally for retry.
         if (lastKnownPosition != null) {
-          alertBody += "\nLocation: https://maps.google.com/?q=${lastKnownPosition!.latitude},${lastKnownPosition!.longitude}";
+          final payload = <String, dynamic>{
+            'latitud': lastKnownPosition!.latitude,
+            'longitud': lastKnownPosition!.longitude,
+            'url_audio_contexto': appApi.baseUrl,
+            'fecha_hora': DateTime.now().toUtc().toIso8601String(),
+            'es_proactiva': true,
+          };
+
+          try {
+            await AlertQueueService(appApi).sendOrQueue(payload);
+          } catch (e) {
+            debugPrint('Background alert send/queue failed: $e');
+          }
         }
-        SmsService.sendEmergencyAlerts(alertBody);
 
         // Update notification to warn user
         try {
@@ -247,8 +292,19 @@ void onStart(ServiceInstance service) async {
 
   // Keep the service alive
   Timer.periodic(const Duration(seconds: 15), (timer) async {
+    // Skip processing if API client wasn't initialized successfully
+    if (!appApiInitialized) {
+      return;
+    }
+
     if (service is AndroidServiceInstance) {
       if (await service.isForegroundService()) {
+        try {
+          await AlertQueueService(appApi).processQueue(maxItems: 5);
+        } catch (e) {
+          debugPrint('Queue retry tick failed: $e');
+        }
+
         // Ensure notification is up to date
         // flutterLocalNotificationsPlugin.show(...)
       }

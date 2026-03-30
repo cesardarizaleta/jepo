@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import '../main.dart';
 import '../theme/app_theme.dart';
 import '../widgets/neumorphic_container.dart';
+import '../services/alert_queue_service.dart';
+import '../services/api_client.dart';
+import '../services/auth_service.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -12,17 +15,112 @@ class RegisterScreen extends StatefulWidget {
 
 class _RegisterScreenState extends State<RegisterScreen> {
   final _nameController = TextEditingController();
+  final _phoneController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
+  bool _isLoading = false;
 
-  void _register() {
-    // Mock register logic
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(builder: (context) => const HomeScreen()),
-      (route) => false,
-    );
+  Future<void> _register() async {
+    if (_isLoading) return;
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    // Ensure API client is ready before attempting network calls
+    final ready = await _ensureApiReady();
+    if (!ready) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('API not initialized. Try again.')),
+        );
+      }
+      setState(() {
+        _isLoading = false;
+      });
+      return;
+    }
+
+    try {
+      final fullName = _nameController.text.trim();
+      final parts = fullName.split(' ');
+      final nombre = parts.isNotEmpty ? parts.first : fullName;
+      final apellido = parts.length > 1 ? parts.sublist(1).join(' ') : '';
+      final email = _emailController.text.trim();
+      final telefono = _phoneController.text.trim();
+      final password = _passwordController.text;
+      final confirmPassword = _confirmPasswordController.text;
+
+      if (password != confirmPassword) {
+        throw Exception('Passwords do not match');
+      }
+
+      if (password.length < 8) {
+        throw Exception('Password must be at least 8 characters');
+      }
+
+      final auth = AuthService(appApi);
+      final resp = await auth.register(
+        nombre: nombre,
+        apellido: apellido,
+        email: email,
+        telefono: telefono,
+        password: password,
+        tokenFcm: null,
+      );
+      if (resp['success'] == true) {
+        await auth.me();
+        await AlertQueueService(appApi).processQueue();
+      }
+
+      if (!mounted) {
+        return;
+      }
+
+      if (resp['success'] == true) {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (context) => const HomeScreen()),
+          (route) => false,
+        );
+      } else {
+        final message = resp['message'] ?? 'Could not create user';
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(message)));
+      }
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Registration failed: $e')));
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<bool> _ensureApiReady() async {
+    if (appApiInitialized) return true;
+    int attempts = 0;
+    while (!appApiInitialized && attempts < 10) {
+      await Future.delayed(const Duration(milliseconds: 200));
+      attempts++;
+    }
+
+    if (appApiInitialized) return true;
+
+    try {
+      await initApi();
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   @override
@@ -81,6 +179,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 ),
                 const SizedBox(height: 20),
 
+                // Phone Field
+                NeumorphicTextField(
+                  controller: _phoneController,
+                  hintText: 'Phone',
+                  icon: Icons.phone,
+                ),
+                const SizedBox(height: 20),
+
                 // Email Field
                 NeumorphicTextField(
                   controller: _emailController,
@@ -111,15 +217,24 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 NeumorphicButton(
                   onPressed: _register,
                   color: AppTheme.primary,
-                  child: const Text(
-                    'SIGN UP',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                      letterSpacing: 1.2,
-                    ),
-                  ),
+                  child: _isLoading
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : const Text(
+                          'SIGN UP',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
                 ),
               ],
             ),

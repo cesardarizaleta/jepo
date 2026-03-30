@@ -1,0 +1,42 @@
+@baseUrl = http://localhost:9002
+@contactId = 1
+@apiKey = change_me_api_key
+@jwt = REEMPLAZAR_CON_TOKEN
+
+### Crear contacto de emergencia
+POST {{baseUrl}}/api/usuarios/contactos
+Content-Type: application/json
+x-api-key: {{apiKey}}
+Authorization: Bearer {{jwt}}
+
+{
+  "nombre_contacto": "Maria Perez",
+  "telefono_contacto": "+56912345678",
+  "prioridad": 1
+}
+
+### Listar contactos
+GET {{baseUrl}}/api/usuarios/contactos
+x-api-key: {{apiKey}}
+Authorization: Bearer {{jwt}}
+
+### Obtener contacto
+GET {{baseUrl}}/api/usuarios/contactos/{{contactId}}
+x-api-key: {{apiKey}}
+Authorization: Bearer {{jwt}}
+
+### Actualizar contacto
+PATCH {{baseUrl}}/api/usuarios/contactos/{{contactId}}
+Content-Type: application/json
+x-api-key: {{apiKey}}
+Authorization: Bearer {{jwt}}
+
+{
+  "telefono_contacto": "+56911112222",
+  "prioridad": 2
+}
+
+### Eliminar contacto
+DELETE {{baseUrl}}/api/usuarios/contactos/{{contactId}}
+x-api-key: {{apiKey}}
+Authorization: Bearer {{jwt}}

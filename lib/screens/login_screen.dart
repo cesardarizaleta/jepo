@@ -3,6 +3,9 @@ import '../main.dart';
 import 'register_screen.dart';
 import '../theme/app_theme.dart';
 import '../widgets/neumorphic_container.dart';
+import '../services/api_client.dart';
+import '../services/alert_queue_service.dart';
+import '../services/auth_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -14,13 +17,79 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  bool _isLoading = false;
 
   void _login() {
-    // Mock login logic
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (context) => const HomeScreen()),
-    );
+    if (_isLoading) return;
+    _performLogin();
+  }
+
+  Future<void> _performLogin() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    // Ensure API client is ready before attempting network calls
+    final ready = await _ensureApiReady();
+    if (!ready) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('API not initialized. Try again.')),
+        );
+      }
+      setState(() {
+        _isLoading = false;
+      });
+      return;
+    }
+
+    try {
+      final email = _emailController.text.trim();
+      final password = _passwordController.text;
+      final auth = AuthService(appApi);
+      await auth.login(email: email, password: password);
+      await auth.me();
+      await AlertQueueService(appApi).processQueue();
+
+      if (!mounted) {
+        return;
+      }
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const HomeScreen()),
+      );
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Login failed: $e')));
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<bool> _ensureApiReady() async {
+    if (appApiInitialized) return true;
+    int attempts = 0;
+    while (!appApiInitialized && attempts < 10) {
+      await Future.delayed(const Duration(milliseconds: 200));
+      attempts++;
+    }
+
+    if (appApiInitialized) return true;
+
+    try {
+      await initApi();
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   @override
@@ -89,15 +158,24 @@ class _LoginScreenState extends State<LoginScreen> {
                 NeumorphicButton(
                   onPressed: _login,
                   color: AppTheme.primary,
-                  child: const Text(
-                    'LOGIN',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                      letterSpacing: 1.2,
-                    ),
-                  ),
+                  child: _isLoading
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : const Text(
+                          'LOGIN',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
                 ),
 
                 const SizedBox(height: 30),
