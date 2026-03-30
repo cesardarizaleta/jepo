@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../widgets/neumorphic_container.dart';
@@ -79,6 +81,29 @@ class _FamilyScreenState extends State<FamilyScreen> {
       return;
     } catch (e) {
       debugPrint('Failed to load contacts: $e');
+      if (mounted) {
+        String msg = 'Failed to load contacts';
+        if (e is ApiException) {
+          try {
+            final body = e.message;
+            final parsed = jsonDecode(body);
+            if (parsed is Map && parsed['message'] != null) {
+              msg = parsed['message'].toString();
+            } else {
+              msg = body;
+            }
+          } catch (_) {
+            msg = e.toString();
+          }
+        } else {
+          msg = e.toString();
+        }
+
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(msg)));
+      }
+
       setState(() {
         _isLoading = false;
       });

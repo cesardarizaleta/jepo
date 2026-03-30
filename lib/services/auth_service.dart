@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart';
 
 import 'api_client.dart';
+import '../utils/phone_utils.dart';
 
 class AuthService {
   static const String _currentUserIdKey = 'jepo_current_user_id';
@@ -25,7 +26,8 @@ class AuthService {
       'nombre': nombre,
       'apellido': apellido,
       'email': email,
-      'telefono': telefono,
+      // Normalize telefono to digits-only string expected by the API
+      'telefono': normalizePhoneForApi(telefono),
       'password': password,
       'token_fcm': tokenFcm,
     };
@@ -112,7 +114,17 @@ class AuthService {
     if (id is int) {
       await prefs.setInt(_currentUserIdKey, id);
     }
-    await prefs.setString(_currentUserKey, jsonEncode(user));
+
+    // Store a normalized copy to keep telefono consistent locally
+    final toStore = Map<String, dynamic>.from(user);
+    if (toStore.containsKey('telefono')) {
+      try {
+        toStore['telefono'] = normalizePhoneForApi(
+          toStore['telefono']?.toString() ?? '',
+        );
+      } catch (_) {}
+    }
+    await prefs.setString(_currentUserKey, jsonEncode(toStore));
   }
 
   /// Update the current user's profile.
@@ -135,6 +147,13 @@ class AuthService {
     final id = current['id'];
     if (id is int) {
       try {
+        // Normalize telefono if present in updates
+        if (updates.containsKey('telefono')) {
+          try {
+            final raw = updates['telefono']?.toString() ?? '';
+            updates['telefono'] = normalizePhoneForApi(raw);
+          } catch (_) {}
+        }
         final resp = await api.patch(
           '/api/usuarios/$id',
           body: updates,
