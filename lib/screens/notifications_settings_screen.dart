@@ -43,7 +43,7 @@ class _NotificationsSettingsScreenState
       backgroundColor: AppTheme.background,
       appBar: AppBar(
         title: const Text(
-          'Notifications',
+          'Notificaciones',
           style: TextStyle(color: AppTheme.textDark),
         ),
         backgroundColor: Colors.transparent,
@@ -56,13 +56,13 @@ class _NotificationsSettingsScreenState
               padding: const EdgeInsets.all(16),
               children: [
                 SwitchListTile(
-                  title: const Text('Enable app notifications'),
+                  title: const Text('Habilitar notificaciones de la aplicación'),
                   value: _enabled,
                   onChanged: (v) => _setEnabled(v),
                 ),
                 const SizedBox(height: 12),
                 const Text(
-                  'When disabled, the app will avoid showing local notifications. Important automated alerts will still attempt network delivery.',
+                  'Cuando se deshabilita, la aplicación evitará mostrar notificaciones locales. Las alertas automáticas importantes seguirán intentando la entrega por red.',
                   style: TextStyle(color: AppTheme.textLight),
                 ),
               ],

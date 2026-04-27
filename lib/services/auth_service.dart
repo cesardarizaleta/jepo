@@ -1,9 +1,14 @@
 import 'dart:convert';
 
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_background_service/flutter_background_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
+import '../models/api_response.dart';
+import '../models/auth_models.dart';
+import '../models/user.dart';
 import 'api_client.dart';
+import 'session_events.dart';
 import '../utils/phone_utils.dart';
 
 class AuthService {
@@ -14,44 +19,52 @@ class AuthService {
 
   AuthService(this.api);
 
-  Future<Map<String, dynamic>> register({
+  Future<ApiResponse<AuthSession>> register({
     required String nombre,
     required String apellido,
     required String email,
     required String telefono,
     required String password,
+    String? cedula,
     String? tokenFcm,
   }) async {
-    final payload = {
-      'nombre': nombre,
-      'apellido': apellido,
-      'email': email,
-      // Normalize telefono to digits-only string expected by the API
-      'telefono': normalizePhoneForApi(telefono),
-      'password': password,
-      'token_fcm': tokenFcm,
-    };
+    final payload = RegisterDto(
+      cedula: cedula,
+      nombre: nombre,
+      apellido: apellido,
+      email: email,
+      telefono: normalizePhoneForApi(telefono),
+      password: password,
+      tokenFcm: tokenFcm,
+    ).toJson();
 
-    final resp = await api.post('/api/auth/register', body: payload);
-    return _persistSessionFromAuthResponse(resp);
+    final envelope = await api.postEnvelope('/api/auth/register', body: payload);
+    return _persistSessionFromAuthResponse(envelope.raw);
   }
 
-  Future<Map<String, dynamic>> login({
+  Future<ApiResponse<AuthSession>> login({
     required String email,
     required String password,
   }) async {
-    final resp = await api.post(
-      '/api/auth/login',
-      body: {'email': email, 'password': password},
-    );
-    return _persistSessionFromAuthResponse(resp);
+    final payload = LoginDto(email: email, password: password).toJson();
+    final envelope = await api.postEnvelope('/api/auth/login', body: payload);
+    return _persistSessionFromAuthResponse(envelope.raw);
   }
 
-  Future<Map<String, dynamic>?> me() async {
-    final resp = await api.get('/api/auth/me', requiresAuth: true);
-    if (resp is Map<String, dynamic> && resp['data'] is Map<String, dynamic>) {
-      await _saveCurrentUser(resp['data'] as Map<String, dynamic>);
-      return resp['data'] as Map<String, dynamic>;
+  Future<User?> me() async {
+    final envelope = await api.getEnvelope('/api/auth/me', requiresAuth: true);
+    final response = ApiResponse<User>.fromJson(
+      envelope.raw,
+      dataParser: (value) {
+        if (value is Map<String, dynamic>) return User.fromJson(value);
+        if (value is Map) return User.fromJson(value.cast<String, dynamic>());
+        return null;
+      },
+    );
+
+    if (response.data != null) {
+      await _saveCurrentUser(response.data!);
+      return response.data;
     }
     return null;
   }
@@ -66,65 +79,83 @@ class AuthService {
     return prefs.getInt(_currentUserIdKey);
   }
 
-  Future<Map<String, dynamic>?> getCurrentUser() async {
+  Future<User?> getCurrentUser() async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(_currentUserKey);
     if (raw == null || raw.isEmpty) {
       return null;
     }
-    return jsonDecode(raw) as Map<String, dynamic>;
+    final decoded = jsonDecode(raw);
+    if (decoded is Map<String, dynamic>) {
+      return User.fromJson(decoded);
+    }
+    if (decoded is Map) {
+      return User.fromJson(decoded.cast<String, dynamic>());
+    }
+    return null;
   }
 
   Future<void> logout() async {
+    // Broadcast logout so background pipelines, queues, and location streams
+    // can tear down immediately.
+    SessionEvents.notifyLogout();
+
     await api.clearAccessToken();
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_currentUserIdKey);
     await prefs.remove(_currentUserKey);
+
+    // Best-effort: stop background service to halt sensor/location streams.
+    try {
+      final bgService = FlutterBackgroundService();
+      bgService.invoke('stopService');
+    } catch (_) {}
   }
 
-  Future<Map<String, dynamic>> _persistSessionFromAuthResponse(
-    dynamic resp,
+  Future<ApiResponse<AuthSession>> _persistSessionFromAuthResponse(
+    Map<String, dynamic> resp,
   ) async {
-    if (resp is! Map<String, dynamic>) {
-      throw ApiException(500, 'Unexpected auth response');
-    }
+    final response = ApiResponse<AuthSession>.fromJson(
+      resp,
+      dataParser: (value) {
+        if (value is Map<String, dynamic>) {
+          return AuthSession.fromJson(value);
+        }
+        if (value is Map) {
+          return AuthSession.fromJson(value.cast<String, dynamic>());
+        }
+        return null;
+      },
+    );
 
-    final data = resp['data'];
-    if (data is! Map<String, dynamic>) {
-      throw ApiException(500, 'Auth response without data');
+    final session = response.data;
+    if (session == null || session.accessToken.isEmpty) {
+      throw const ApiException(
+        statusCode: 500,
+        message: 'Auth response without access token',
+      );
     }
+    await api.saveAccessToken(session.accessToken);
+    await _saveCurrentUser(session.user);
 
-    final token = data['access_token']?.toString();
-    if (token == null || token.isEmpty) {
-      throw ApiException(500, 'Auth response without access token');
-    }
-    await api.saveAccessToken(token);
+    // Allow future 401 events to be detected again now that we have a valid session.
+    SessionEvents.resetInvalidation();
 
-    final user = data['user'];
-    if (user is Map<String, dynamic>) {
-      await _saveCurrentUser(user);
-    }
-
-    return resp;
+    return response;
   }
 
-  Future<void> _saveCurrentUser(Map<String, dynamic> user) async {
+  Future<void> _saveCurrentUser(User user) async {
     final prefs = await SharedPreferences.getInstance();
-    final id = user['id'];
-    if (id is int) {
-      await prefs.setInt(_currentUserIdKey, id);
+    if (user.id != null) {
+      await prefs.setInt(_currentUserIdKey, user.id!);
     }
 
-    // Store a normalized copy to keep telefono consistent locally
-    final toStore = Map<String, dynamic>.from(user);
-    if (toStore.containsKey('telefono')) {
-      try {
-        toStore['telefono'] = normalizePhoneForApi(
-          toStore['telefono']?.toString() ?? '',
-        );
-      } catch (_) {}
-    }
-    await prefs.setString(_currentUserKey, jsonEncode(toStore));
+    final normalized = user.telefono == null
+        ? null
+        : normalizePhoneForApi(user.telefono!);
+
+    final toStore = user.copyWith(telefono: normalized);
+    await prefs.setString(_currentUserKey, jsonEncode(toStore.toJson()));
   }
 
   /// Update the current user's profile.
@@ -132,37 +163,49 @@ class AuthService {
   /// This attempts to patch the server-side user record if an `id` is available
   /// and the network call succeeds. On any failure the local stored user is
   /// still updated so UI reflects changes immediately.
-  Future<Map<String, dynamic>> updateProfile(
-    Map<String, dynamic> updates,
+  Future<User> updateProfile(
+    UpdateUserDto updates,
   ) async {
     final current = await getCurrentUser();
     if (current == null) {
-      throw ApiException(401, 'No current user');
+      throw const ApiException(statusCode: 401, message: 'No current user');
     }
 
-    final merged = <String, dynamic>{}
-      ..addAll(current)
-      ..addAll(updates);
+    final merged = current.copyWith(
+      nombre: updates.nombre ?? current.nombre,
+      apellido: updates.apellido ?? current.apellido,
+      telefono: updates.telefono ?? current.telefono,
+      tokenFcm: updates.tokenFcm ?? current.tokenFcm,
+    );
 
-    final id = current['id'];
-    if (id is int) {
+    final id = current.id;
+    if (id != null) {
       try {
-        // Normalize telefono if present in updates
-        if (updates.containsKey('telefono')) {
-          try {
-            final raw = updates['telefono']?.toString() ?? '';
-            updates['telefono'] = normalizePhoneForApi(raw);
-          } catch (_) {}
+        final payload = updates.toJson();
+        if (payload.containsKey('telefono')) {
+          payload['telefono'] = normalizePhoneForApi(
+            payload['telefono']?.toString() ?? '',
+          );
         }
-        final resp = await api.patch(
+
+        final envelope = await api.patchEnvelope(
           '/api/usuarios/$id',
-          body: updates,
+          body: payload,
           requiresAuth: true,
         );
-        if (resp is Map<String, dynamic> &&
-            resp['data'] is Map<String, dynamic>) {
-          await _saveCurrentUser(resp['data'] as Map<String, dynamic>);
-          return resp['data'] as Map<String, dynamic>;
+
+        final response = ApiResponse<User>.fromJson(
+          envelope.raw,
+          dataParser: (value) {
+            if (value is Map<String, dynamic>) return User.fromJson(value);
+            if (value is Map) return User.fromJson(value.cast<String, dynamic>());
+            return null;
+          },
+        );
+
+        if (response.data != null) {
+          await _saveCurrentUser(response.data!);
+          return response.data!;
         }
       } catch (e) {
         // Best-effort: ignore network error and persist locally.

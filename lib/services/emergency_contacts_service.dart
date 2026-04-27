@@ -1,57 +1,99 @@
 import 'api_client.dart';
-import '../utils/phone_utils.dart';
+import '../models/api_response.dart';
+import '../models/emergency_contact.dart';
 
 class EmergencyContactsService {
   final ApiClient api;
 
   EmergencyContactsService(this.api);
 
-  Future<List<dynamic>> listContacts() async {
-    final resp = await api.get('/api/usuarios/contactos', requiresAuth: true);
-    if (resp is Map && resp.containsKey('data')) {
-      return resp['data'] as List<dynamic>;
-    }
-    if (resp is List) return resp;
-    return [];
-  }
-
-  Future<Map<String, dynamic>> createContact(
-    Map<String, dynamic> payload,
-  ) async {
-    // Ensure telefono_contacto is normalized to a numeric string expected by the API
-    if (payload.containsKey('telefono_contacto')) {
-      try {
-        final raw = payload['telefono_contacto']?.toString() ?? '';
-        payload['telefono_contacto'] = normalizePhoneForApi(raw);
-      } catch (_) {}
-    }
-    final resp = await api.post(
+  Future<List<EmergencyContact>> listContacts() async {
+    final envelope = await api.getEnvelope(
       '/api/usuarios/contactos',
-      body: payload,
       requiresAuth: true,
     );
-    if (resp is Map<String, dynamic>) return resp;
-    return {'success': false, 'message': 'Unexpected response', 'data': null};
+    final response = ApiResponse<List<EmergencyContact>>.fromJson(
+      envelope.raw,
+      dataParser: (value) {
+        if (value is! List) return const <EmergencyContact>[];
+        return value
+            .whereType<Map>()
+            .map(
+              (e) => EmergencyContact.fromJson(e.cast<String, dynamic>()),
+            )
+            .toList(growable: false);
+      },
+    );
+
+    final contacts = response.data ?? const <EmergencyContact>[];
+    final sorted = contacts.toList(growable: false)
+      ..sort((a, b) => a.prioridad.compareTo(b.prioridad));
+    return sorted;
   }
 
-  Future<Map<String, dynamic>> updateContact(
-    int id,
-    Map<String, dynamic> payload,
-  ) async {
-    // Normalize phone before updating
-    if (payload.containsKey('telefono_contacto')) {
-      try {
-        final raw = payload['telefono_contacto']?.toString() ?? '';
-        payload['telefono_contacto'] = normalizePhoneForApi(raw);
-      } catch (_) {}
-    }
-    final resp = await api.patch(
-      '/api/usuarios/contactos/$id',
-      body: payload,
+  Future<EmergencyContact?> createContact(CreateEmergencyContactDto payload) async {
+    final envelope = await api.postEnvelope(
+      '/api/usuarios/contactos',
+      body: payload.toJson(),
       requiresAuth: true,
     );
-    if (resp is Map<String, dynamic>) return resp;
-    return {'success': false, 'message': 'Unexpected response', 'data': null};
+    final response = ApiResponse<EmergencyContact>.fromJson(
+      envelope.raw,
+      dataParser: (value) {
+        if (value is Map<String, dynamic>) {
+          return EmergencyContact.fromJson(value);
+        }
+        if (value is Map) {
+          return EmergencyContact.fromJson(value.cast<String, dynamic>());
+        }
+        return null;
+      },
+    );
+    return response.data;
+  }
+
+  Future<EmergencyContact?> getContact(int id) async {
+    final envelope = await api.getEnvelope(
+      '/api/usuarios/contactos/$id',
+      requiresAuth: true,
+    );
+    final response = ApiResponse<EmergencyContact>.fromJson(
+      envelope.raw,
+      dataParser: (value) {
+        if (value is Map<String, dynamic>) {
+          return EmergencyContact.fromJson(value);
+        }
+        if (value is Map) {
+          return EmergencyContact.fromJson(value.cast<String, dynamic>());
+        }
+        return null;
+      },
+    );
+    return response.data;
+  }
+
+  Future<EmergencyContact?> updateContact(
+    int id,
+    UpdateEmergencyContactDto payload,
+  ) async {
+    final envelope = await api.patchEnvelope(
+      '/api/usuarios/contactos/$id',
+      body: payload.toJson(),
+      requiresAuth: true,
+    );
+    final response = ApiResponse<EmergencyContact>.fromJson(
+      envelope.raw,
+      dataParser: (value) {
+        if (value is Map<String, dynamic>) {
+          return EmergencyContact.fromJson(value);
+        }
+        if (value is Map) {
+          return EmergencyContact.fromJson(value.cast<String, dynamic>());
+        }
+        return null;
+      },
+    );
+    return response.data;
   }
 
   Future<void> deleteContact(int id) async {

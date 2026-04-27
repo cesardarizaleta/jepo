@@ -10,7 +10,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
       backgroundColor: AppTheme.background,
       appBar: AppBar(
         title: const Text(
-          'Privacy & Policies',
+          'Privacidad y Políticas',
           style: TextStyle(color: AppTheme.textDark),
         ),
         backgroundColor: Colors.transparent,
@@ -23,7 +23,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: const [
             Text(
-              'Privacy Policy',
+              'Política de Privacidad',
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
@@ -32,12 +32,12 @@ class PrivacyPolicyScreen extends StatelessWidget {
             ),
             SizedBox(height: 12),
             Text(
-              'This application collects minimal personal data required to provide proactive assistance services. Location and sensor data are used to detect potential danger. Data may be transmitted to trusted contacts when alerts are generated. We store data securely and follow privacy best practices.\n\nFor details, replace this placeholder with your full privacy policy.',
+              'Esta aplicación recopila los datos personales mínimos requeridos para proporcionar servicios de asistencia proactiva. Los datos de ubicación y sensores se utilizan para detectar peligros potenciales. Los datos pueden transmitirse a contactos de confianza cuando se generan alertas. Almacenamos los datos de forma segura y seguimos las mejores prácticas de privacidad.\n\nPara obtener detalles, reemplace este marcador de posición con su política de privacidad completa.',
               style: TextStyle(color: AppTheme.textLight),
             ),
             SizedBox(height: 20),
             Text(
-              'Terms of Service',
+              'Términos de Servicio',
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
@@ -46,7 +46,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
             ),
             SizedBox(height: 12),
             Text(
-              'Replace this placeholder with your app terms and conditions.',
+              'Reemplace este marcador de posición con los términos y condiciones de su aplicación.',
               style: TextStyle(color: AppTheme.textLight),
             ),
           ],

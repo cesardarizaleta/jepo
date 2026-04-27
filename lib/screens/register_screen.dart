@@ -5,6 +5,7 @@ import '../widgets/neumorphic_container.dart';
 import '../services/alert_queue_service.dart';
 import '../services/api_client.dart';
 import '../services/auth_service.dart';
+import '../utils/app_toast.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -15,6 +16,7 @@ class RegisterScreen extends StatefulWidget {
 
 class _RegisterScreenState extends State<RegisterScreen> {
   final _nameController = TextEditingController();
+  final _cedulaController = TextEditingController();
   final _phoneController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -32,9 +34,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     final ready = await _ensureApiReady();
     if (!ready) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('API not initialized. Try again.')),
-        );
+        AppToast.error(context, 'API no inicializada. Inténtalo de nuevo.');
       }
       setState(() {
         _isLoading = false;
@@ -49,15 +49,20 @@ class _RegisterScreenState extends State<RegisterScreen> {
       final apellido = parts.length > 1 ? parts.sublist(1).join(' ') : '';
       final email = _emailController.text.trim();
       final telefono = _phoneController.text.trim();
+      final cedula = _cedulaController.text.trim();
       final password = _passwordController.text;
       final confirmPassword = _confirmPasswordController.text;
 
+      if (cedula.isEmpty) {
+        throw Exception('La cédula es requerida');
+      }
+
       if (password != confirmPassword) {
-        throw Exception('Passwords do not match');
+        throw Exception('Las contraseñas no coinciden');
       }
 
       if (password.length < 8) {
-        throw Exception('Password must be at least 8 characters');
+        throw Exception('La contraseña debe tener al menos 8 caracteres');
       }
 
       final auth = AuthService(appApi);
@@ -66,10 +71,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
         apellido: apellido,
         email: email,
         telefono: telefono,
+        cedula: cedula,
         password: password,
         tokenFcm: null,
       );
-      if (resp['success'] == true) {
+      if (resp.success) {
         await auth.me();
         await AlertQueueService(appApi).processQueue();
       }
@@ -78,26 +84,36 @@ class _RegisterScreenState extends State<RegisterScreen> {
         return;
       }
 
-      if (resp['success'] == true) {
+      if (resp.success) {
         Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(builder: (context) => const HomeScreen()),
           (route) => false,
         );
       } else {
-        final message = resp['message'] ?? 'Could not create user';
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(message)));
+        // Display backend validation errors if available.
+        final message = resp.errors.isNotEmpty
+            ? resp.errors.join('\n')
+            : resp.message;
+        AppToast.error(context, message);
       }
     } catch (e) {
       if (!mounted) {
         return;
       }
 
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Registration failed: $e')));
+      String errorMsg = 'Error al registrarse';
+      if (e is ApiException) {
+        if (e.errors.isNotEmpty) {
+          errorMsg = e.errors.join('\n');
+        } else {
+          errorMsg = e.message;
+        }
+      } else {
+        errorMsg = e.toString();
+      }
+
+      AppToast.error(context, errorMsg);
     } finally {
       setState(() {
         _isLoading = false;
@@ -163,7 +179,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                 // Title
                 Text(
-                  'Create Account',
+                  'Crear Cuenta',
                   style: Theme.of(context).textTheme.displayLarge?.copyWith(
                     fontSize: 28,
                     color: AppTheme.textDark,
@@ -174,15 +190,24 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 // Name Field
                 NeumorphicTextField(
                   controller: _nameController,
-                  hintText: 'Full Name',
+                  hintText: 'Nombre Completo',
                   icon: Icons.person_outline,
+                ),
+                const SizedBox(height: 20),
+
+                // Cedula Field
+                NeumorphicTextField(
+                  controller: _cedulaController,
+                  hintText: 'Cédula',
+                  icon: Icons.badge_outlined,
+                  keyboardType: TextInputType.number,
                 ),
                 const SizedBox(height: 20),
 
                 // Phone Field
                 NeumorphicTextField(
                   controller: _phoneController,
-                  hintText: 'Phone',
+                  hintText: 'Teléfono',
                   icon: Icons.phone,
                 ),
                 const SizedBox(height: 20),
@@ -190,7 +215,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 // Email Field
                 NeumorphicTextField(
                   controller: _emailController,
-                  hintText: 'Email',
+                  hintText: 'Correo electrónico',
                   icon: Icons.email_outlined,
                 ),
                 const SizedBox(height: 20),
@@ -198,7 +223,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 // Password Field
                 NeumorphicTextField(
                   controller: _passwordController,
-                  hintText: 'Password',
+                  hintText: 'Contraseña',
                   obscureText: true,
                   icon: Icons.lock_outline,
                 ),
@@ -207,7 +232,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 // Confirm Password Field
                 NeumorphicTextField(
                   controller: _confirmPasswordController,
-                  hintText: 'Confirm Password',
+                  hintText: 'Confirmar Contraseña',
                   obscureText: true,
                   icon: Icons.lock_outline,
                 ),
@@ -227,7 +252,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           ),
                         )
                       : const Text(
-                          'SIGN UP',
+                          'REGISTRARSE',
                           style: TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.bold,

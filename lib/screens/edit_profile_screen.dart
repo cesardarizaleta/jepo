@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import '../models/user.dart';
 import '../services/api_client.dart';
 import '../services/auth_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/neumorphic_container.dart';
+import '../utils/app_toast.dart';
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
@@ -31,10 +33,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       final svc = AuthService(appApi);
       final user = await svc.getCurrentUser();
       if (user != null) {
-        _nombreCtl.text = user['nombre']?.toString() ?? '';
-        _apellidoCtl.text = user['apellido']?.toString() ?? '';
-        _emailCtl.text = user['email']?.toString() ?? '';
-        _telefonoCtl.text = user['telefono']?.toString() ?? '';
+        _nombreCtl.text = user.nombre ?? '';
+        _apellidoCtl.text = user.apellido ?? '';
+        _emailCtl.text = user.email ?? '';
+        _telefonoCtl.text = user.telefono ?? '';
       }
     } catch (e) {
       debugPrint('EditProfile load failed: $e');
@@ -53,26 +55,32 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
-    final updates = <String, dynamic>{
-      'nombre': _nombreCtl.text.trim(),
-      'apellido': _apellidoCtl.text.trim(),
-      'telefono': _telefonoCtl.text.trim(),
-    };
+    final updates = UpdateUserDto(
+      nombre: _nombreCtl.text.trim(),
+      apellido: _apellidoCtl.text.trim(),
+      telefono: _telefonoCtl.text.trim(),
+    );
 
     try {
       final svc = AuthService(appApi);
       await svc.updateProfile(updates);
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Profile updated')));
+      AppToast.success(context, 'Perfil actualizado');
       Navigator.of(context).pop(true);
     } catch (e) {
       debugPrint('Failed to save profile: $e');
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Failed to update profile: $e')));
+
+      String errorMsg = 'Error al actualizar el perfil';
+      if (e is ApiException) {
+        if (e.errors.isNotEmpty) {
+          errorMsg = e.errors.join('\n');
+        } else {
+          errorMsg = e.message;
+        }
+      }
+
+      AppToast.error(context, errorMsg);
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -84,7 +92,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       backgroundColor: AppTheme.background,
       appBar: AppBar(
         title: const Text(
-          'Edit Profile',
+          'Editar Perfil',
           style: TextStyle(color: AppTheme.textDark),
         ),
         backgroundColor: Colors.transparent,
@@ -105,7 +113,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       controller: _nombreCtl,
                       decoration: const InputDecoration(labelText: 'Nombre'),
                       validator: (v) =>
-                          (v == null || v.trim().isEmpty) ? 'Required' : null,
+                          (v == null || v.trim().isEmpty) ? 'Requerido' : null,
                     ),
                     const SizedBox(height: 12),
                     TextFormField(
@@ -131,7 +139,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 onPressed: _saving ? null : _save,
                 child: _saving
                     ? const CircularProgressIndicator()
-                    : const Text('Save'),
+                    : const Text('Guardar'),
               ),
             ],
           ),

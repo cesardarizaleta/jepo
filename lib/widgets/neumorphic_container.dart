@@ -121,6 +121,7 @@ class NeumorphicTextField extends StatelessWidget {
   final bool obscureText;
   final IconData? icon;
   final TextEditingController? controller;
+  final TextInputType? keyboardType;
 
   const NeumorphicTextField({
     super.key,
@@ -128,6 +129,7 @@ class NeumorphicTextField extends StatelessWidget {
     this.obscureText = false,
     this.icon,
     this.controller,
+    this.keyboardType,
   });
 
   @override
@@ -158,6 +160,7 @@ class NeumorphicTextField extends StatelessWidget {
       child: TextField(
         controller: controller,
         obscureText: obscureText,
+        keyboardType: keyboardType,
         decoration: InputDecoration(
           border: InputBorder.none,
           hintText: hintText,

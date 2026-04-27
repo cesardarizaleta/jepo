@@ -6,14 +6,31 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:sensors_plus/sensors_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../models/incident_alert.dart';
 import 'alert_queue_service.dart';
 import 'api_client.dart';
+import 'alerts_service.dart';
+import 'diagnostic_log_service.dart';
+import 'pre_alert_service.dart';
+import 'session_events.dart';
 
 // Notification Channel IDs
 const String monitoringChannelId = 'jepo_monitoring';
 const String alertChannelId = 'jepo_alerts';
 const int monitoringNotificationId = 888;
 const int alertNotificationId = 999;
+
+/// Heartbeat interval for location updates during an active incident.
+const Duration _heartbeatInterval = Duration(seconds: 30);
+
+/// Minimum G-force magnitude to trigger an impact detection.
+const double _impactThreshold = 30.0;
+
+/// Debounce window for sensor-triggered impacts.
+const int _impactDebounceSeconds = 3;
+
+/// Key to persist last impact timestamp for debounce across events.
+const String _lastImpactKey = 'jepo_last_impact_at';
 
 Future<void> initializeService() async {
   final service = FlutterBackgroundService();
@@ -25,8 +42,8 @@ Future<void> initializeService() async {
   const AndroidNotificationChannel monitoringChannel =
       AndroidNotificationChannel(
         monitoringChannelId,
-        'Jepo Monitoring',
-        description: 'Continuous background monitoring.',
+        'Monitoreo de Jepo',
+        description: 'Monitoreo continuo en segundo plano.',
         importance: Importance.low,
         playSound: false,
         showBadge: false,
@@ -35,8 +52,8 @@ Future<void> initializeService() async {
   // 2. Alert Channel (High Importance, Sound, Vibration)
   const AndroidNotificationChannel alertChannel = AndroidNotificationChannel(
     alertChannelId,
-    'Jepo Alerts',
-    description: 'Critical safety alerts.',
+    'Alertas de Jepo',
+    description: 'Alertas de seguridad críticas.',
     importance: Importance.max, // Max importance for heads-up display
     playSound: true,
     enableVibration: true,
@@ -60,8 +77,8 @@ Future<void> initializeService() async {
       autoStart: true,
       isForegroundMode: true,
       notificationChannelId: monitoringChannelId, // Default to monitoring
-      initialNotificationTitle: 'Jepo Active',
-      initialNotificationContent: 'Initializing safety systems...',
+      initialNotificationTitle: 'Jepo Activo',
+      initialNotificationContent: 'Inicializando sistemas de seguridad...',
       foregroundServiceNotificationId: monitoringNotificationId,
     ),
     iosConfiguration: IosConfiguration(
@@ -99,6 +116,7 @@ void onStart(ServiceInstance service) async {
 
   await flutterLocalNotificationsPlugin.initialize(initializationSettings);
 
+  // Initialise the API client for background work.
   try {
     await initApi();
     await AlertQueueService(appApi).processQueue();
@@ -108,6 +126,13 @@ void onStart(ServiceInstance service) async {
 
   // Listen for stop command
   service.on('stopService').listen((event) {
+    PreAlertService.clearIncident();
+    service.stopSelf();
+  });
+
+  // Listen for session logout to stop ourselves cleanly.
+  SessionEvents.onLogout.listen((_) {
+    PreAlertService.clearIncident();
     service.stopSelf();
   });
 
@@ -115,12 +140,12 @@ void onStart(ServiceInstance service) async {
   try {
     await flutterLocalNotificationsPlugin.show(
       monitoringNotificationId,
-      'Jepo Active',
-      'Safety systems online. Monitoring...',
+      'Jepo Activo',
+      'Sistemas de seguridad en línea. Monitoreando...',
       const NotificationDetails(
         android: AndroidNotificationDetails(
           monitoringChannelId,
-          'Jepo Monitoring',
+          'Monitoreo de Jepo',
           icon: '@mipmap/ic_launcher',
           largeIcon: DrawableResourceAndroidBitmap('@mipmap/ic_launcher'),
           ongoing: true,
@@ -134,20 +159,15 @@ void onStart(ServiceInstance service) async {
     debugPrint("Error showing initial notification: $e");
   }
 
-  // --- Telemetry Logic ---
-
-  // 1. Location Tracking (Optimized for Battery)
-  // We use AndroidSettings to set an interval, allowing the GPS to sleep.
-  // Accuracy is kept High for speed detection, but we don't need updates every second if not moving much.
+  // -------------------------------------------------------------------------
+  // Phase 1: Location Tracking
+  // -------------------------------------------------------------------------
 
   final locationSettings = AndroidSettings(
     accuracy: LocationAccuracy.high,
     distanceFilter: 15, // Update only after moving 15 meters
     forceLocationManager: true,
-    intervalDuration: const Duration(
-      seconds: 10,
-    ), // Minimum interval between updates
-    // foregroundNotificationConfig: ... // We handle notification manually
+    intervalDuration: const Duration(seconds: 10),
   );
 
   Position? lastKnownPosition;
@@ -158,19 +178,19 @@ void onStart(ServiceInstance service) async {
 
   locationStream.listen((Position position) {
     lastKnownPosition = position;
-    // Here we would process the location (Graph Theory, Safe Zones)
-    // For now, we just update the notification to show we are alive
 
     // Update notification content to show latest activity
     try {
       flutterLocalNotificationsPlugin.show(
         monitoringNotificationId,
-        'Jepo Active',
-        'Location: ${position.latitude.toStringAsFixed(4)}, ${position.longitude.toStringAsFixed(4)}',
+        'Jepo Activo',
+        PreAlertService.isIncidentActive
+            ? 'INCIDENTE ACTIVO — Rastreo de ubicación...'
+            : 'Ubicación: ${position.latitude.toStringAsFixed(4)}, ${position.longitude.toStringAsFixed(4)}',
         const NotificationDetails(
           android: AndroidNotificationDetails(
             monitoringChannelId,
-            'Jepo Monitoring',
+            'Monitoreo de Jepo',
             icon: '@mipmap/ic_launcher',
             largeIcon: DrawableResourceAndroidBitmap('@mipmap/ic_launcher'),
             ongoing: true,
@@ -188,101 +208,108 @@ void onStart(ServiceInstance service) async {
       "lat": position.latitude,
       "lng": position.longitude,
       "speed": position.speed,
+      "incident_active": PreAlertService.isIncidentActive,
     });
   });
 
-  // 2. Sensor Monitoring (HAR)
-  // Accelerometer for falls/impacts
-  // We can throttle this if needed, but for impact detection we need real-time.
-  // The logic is lightweight (simple math).
-  // Persistent key to store the last impact timestamp, in UTC ISO8601
-  const String lastImpactKey = 'jepo_last_impact_at';
-  const int throttleWindowSeconds = 3;
+  // -------------------------------------------------------------------------
+  // Phase 2: Sensor Monitoring — Impact Detection
+  // -------------------------------------------------------------------------
 
   accelerometerEventStream().listen(
     (AccelerometerEvent event) async {
-      // Calculate G-force
+      // Calculate G-force magnitude.
       double magnitude = (event.x.abs() + event.y.abs() + event.z.abs());
 
-      // Simple Threshold for "Risk" (>30 m/s^2 is roughly 3G)
-      if (magnitude > 30.0) {
-        // Debounce/Throttle sensor-triggered alerts: ignore impacts that occur
-        // within `throttleWindowSeconds` of the last accepted impact.
+      if (magnitude > _impactThreshold) {
+        // Debounce: ignore impacts within the debounce window.
         try {
           final prefs = await SharedPreferences.getInstance();
-          final lastImpactStr = prefs.getString(lastImpactKey);
+          final lastImpactStr = prefs.getString(_lastImpactKey);
           final now = DateTime.now().toUtc();
           if (lastImpactStr != null && lastImpactStr.isNotEmpty) {
             try {
               final lastImpact = DateTime.parse(lastImpactStr).toUtc();
               if (now.difference(lastImpact) <
-                  Duration(seconds: throttleWindowSeconds)) {
-                debugPrint(
-                  'BackgroundService: impact ignored due to throttle (lastImpact=$lastImpact)',
-                );
-                return;
+                  const Duration(seconds: _impactDebounceSeconds)) {
+                return; // within debounce window
               }
             } catch (_) {}
           }
-          await prefs.setString(lastImpactKey, now.toIso8601String());
+          await prefs.setString(_lastImpactKey, now.toIso8601String());
         } catch (e) {
-          debugPrint('BackgroundService: error reading/writing lastImpact: $e');
+          debugPrint('BackgroundService: debounce error: $e');
         }
-        // TRIGGER ALERT!
-        // In a real app, this would call the Alert Module
 
+        // Notify UI of risk detection.
         service.invoke('risk_detected', {
           "type": "IMPACT",
           "magnitude": magnitude,
         });
 
-        // Try API alert first, or queue locally for retry.
-        if (lastKnownPosition != null) {
-          final payload = <String, dynamic>{
-            'latitud': lastKnownPosition!.latitude,
-            'longitud': lastKnownPosition!.longitude,
-            'url_audio_contexto': appApi.baseUrl,
-            'fecha_hora': DateTime.now().toUtc().toIso8601String(),
-            'es_proactiva': true,
-          };
+        // ---------------------------------------------------------------
+        // Phase 3: Incident Dispatch Pipeline
+        //
+        // If an incident is already active, we DON'T create a new one.
+        // The location heartbeat timer handles ongoing updates.
+        // ---------------------------------------------------------------
 
-          try {
-            await AlertQueueService(appApi).sendOrQueue(payload);
-          } catch (e) {
-            debugPrint('Background alert send/queue failed: $e');
-          }
-        }
+        if (lastKnownPosition == null) return;
+        if (!appApiInitialized) return;
 
-        // Update notification to warn user
-        try {
-          flutterLocalNotificationsPlugin.show(
-            alertNotificationId,
-            'CRITICAL ALERT',
-            'IMPACT DETECTED! Initiating emergency protocol...',
-            const NotificationDetails(
-              android: AndroidNotificationDetails(
-                alertChannelId,
-                'Jepo Alerts',
-                importance: Importance.max,
-                priority: Priority.max,
-                ongoing: false,
-                autoCancel: true,
-                icon: '@mipmap/ic_launcher',
-                largeIcon: DrawableResourceAndroidBitmap('@mipmap/ic_launcher'),
-                color: Colors.red,
-                enableVibration: true,
-                playSound: true,
-                styleInformation: BigTextStyleInformation(
-                  'IMPACT DETECTED! Initiating emergency protocol...\n\nPlease confirm you are safe or help will be requested automatically.',
-                  contentTitle: 'CRITICAL ALERT',
-                  summaryText: 'Risk Detected',
-                ),
-              ),
-            ),
+        if (PreAlertService.isIncidentActive) {
+          debugPrint(
+            'BackgroundService: incident already active, skipping new incident creation',
           );
-        } catch (e) {
-          debugPrint("Error showing alert notification: $e");
+          return;
         }
+
+        // Show critical alert notification immediately.
+        _showCriticalNotification(flutterLocalNotificationsPlugin);
+
+        // NEW: Wait for user confirmation (False Positive check)
+        final shouldSend = await PreAlertService.requestConfirmation(seconds: 5);
+        if (!shouldSend) {
+          debugPrint('BackgroundService: User confirmed safe, alert cancelled.');
+          // Remove the critical notification if user confirmed safe
+          await flutterLocalNotificationsPlugin.cancel(alertNotificationId);
+          return;
+        }
+
+        // Generate a client event ID for deduplication.
+        final eventId = _generateEventId();
+
+        final payload = CreateIncidentAlertDto(
+          latitud: lastKnownPosition!.latitude,
+          longitud: lastKnownPosition!.longitude,
+          urlAudioContexto: appApi.baseUrl,
+          fechaHora: DateTime.now().toUtc(),
+          esProactiva: true,
+          clientEventId: eventId,
+        );
+
+        try {
+          final sent = await AlertQueueService(appApi).sendOrQueue(
+            payload,
+            bypassConfirmation: true,
+          );
+          if (sent) {
+            // Alert was created successfully.
+            final incId = await AlertQueueService(appApi).activeIncidentId;
+            if (incId != null) {
+              PreAlertService.activateIncident(incId);
+            }
+          }
+        } catch (e) {
+          debugPrint('Background alert send/queue failed: $e');
+        }
+
+        DiagnosticLogService.logBackgroundEvent(
+          'impact_detected',
+          detail: 'magnitude=${magnitude.toStringAsFixed(1)} eventId=$eventId',
+        );
+
+        // Notification was already shown at the start of the confirmation window.
       }
     },
     onError: (e) {
@@ -290,24 +317,100 @@ void onStart(ServiceInstance service) async {
     },
   );
 
-  // Keep the service alive
+  // -------------------------------------------------------------------------
+  // Phase 4: Periodic Tasks — Queue Retry + Location Heartbeat
+  // -------------------------------------------------------------------------
+
   Timer.periodic(const Duration(seconds: 15), (timer) async {
-    // Skip processing if API client wasn't initialized successfully
-    if (!appApiInitialized) {
-      return;
-    }
+    // Skip processing if API client wasn't initialized successfully.
+    if (!appApiInitialized) return;
+
+    // Don't process if session is invalidated.
+    if (SessionEvents.isInvalidated) return;
 
     if (service is AndroidServiceInstance) {
       if (await service.isForegroundService()) {
+        // Process queued alerts (max 1 per cycle).
         try {
-          await AlertQueueService(appApi).processQueue(maxItems: 5);
+          await AlertQueueService(appApi).processQueue(maxItems: 1);
         } catch (e) {
           debugPrint('Queue retry tick failed: $e');
         }
-
-        // Ensure notification is up to date
-        // flutterLocalNotificationsPlugin.show(...)
       }
     }
   });
+
+  // Heartbeat timer: during an active incident, send location updates
+  // as non-proactive alerts (es_proactiva=false) so backend receives
+  // updated coordinates WITHOUT re-notifying emergency contacts.
+  Timer.periodic(_heartbeatInterval, (timer) async {
+    if (!appApiInitialized) return;
+    if (SessionEvents.isInvalidated) return;
+    if (!PreAlertService.isIncidentActive) return;
+    if (lastKnownPosition == null) return;
+
+    final incidentId = PreAlertService.activeIncidentId;
+    if (incidentId == null) return;
+
+    try {
+      debugPrint(
+        'BackgroundService: heartbeat location update for incident $incidentId',
+      );
+      await AlertsService(appApi).updateAlert(
+        incidentId,
+        UpdateIncidentAlertDto(
+          latitud: lastKnownPosition!.latitude,
+          longitud: lastKnownPosition!.longitude,
+          fechaHora: DateTime.now().toUtc(),
+          esProactiva: false, // Don't re-notify contacts
+        ),
+      );
+      DiagnosticLogService.logIncidentHeartbeat(alertId: incidentId);
+    } catch (e) {
+      debugPrint('BackgroundService: heartbeat update failed: $e');
+    }
+  });
+}
+
+/// Generate a simple UUID-like event ID for deduplication.
+String _generateEventId() {
+  final now = DateTime.now().toUtc().microsecondsSinceEpoch;
+  final rng = now.hashCode ^ DateTime.now().millisecond;
+  return '${now.toRadixString(36)}-${rng.toRadixString(36)}';
+}
+
+/// Show the critical impact alert notification.
+void _showCriticalNotification(
+  FlutterLocalNotificationsPlugin plugin,
+) {
+  try {
+    plugin.show(
+      alertNotificationId,
+      'ALERTA CRÍTICA',
+      '¡IMPACTO DETECTADO! Iniciando protocolo de emergencia...',
+      const NotificationDetails(
+        android: AndroidNotificationDetails(
+          alertChannelId,
+          'Alertas de Jepo',
+          importance: Importance.max,
+          priority: Priority.max,
+          ongoing: false,
+          autoCancel: true,
+          fullScreenIntent: true,
+          icon: '@mipmap/ic_launcher',
+          largeIcon: DrawableResourceAndroidBitmap('@mipmap/ic_launcher'),
+          color: Colors.red,
+          enableVibration: true,
+          playSound: true,
+          styleInformation: BigTextStyleInformation(
+            '¡IMPACTO DETECTADO! Iniciando protocolo de emergencia...\n\nPor favor, confirme que está a salvo o se solicitará ayuda automáticamente.',
+            contentTitle: 'ALERTA CRÍTICA',
+            summaryText: 'Riesgo Detectado',
+          ),
+        ),
+      ),
+    );
+  } catch (e) {
+    debugPrint("Error showing alert notification: $e");
+  }
 }

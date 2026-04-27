@@ -1,12 +1,12 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
+import '../models/emergency_contact.dart';
 import '../theme/app_theme.dart';
 import '../widgets/neumorphic_container.dart';
 import '../services/api_client.dart';
 import '../services/auth_service.dart';
 import '../services/emergency_contacts_service.dart';
 import '../utils/phone_utils.dart';
+import '../utils/app_toast.dart';
 
 class _FamilyMember {
   final int? id;
@@ -57,20 +57,14 @@ class _FamilyScreenState extends State<FamilyScreen> {
       final ecService = EmergencyContactsService(appApi);
       final list = await ecService.listContacts();
       final mapped = list.map<_FamilyMember>((e) {
-        final map = e as Map<String, dynamic>;
-        final rawPhone = map['telefono_contacto']?.toString() ?? '';
+        final rawPhone = e.telefonoContacto;
         return _FamilyMember(
-          id: map['id'] as int?,
-          name:
-              map['nombre_contacto']?.toString() ??
-              map['nombre']?.toString() ??
-              'Unknown',
+          id: e.id,
+          name: e.nombreContacto.isEmpty ? 'Desconocido' : e.nombreContacto,
           phone: rawPhone.isEmpty
               ? ''
               : formatToE164(normalizePhoneForApi(rawPhone)),
-          priority: map['prioridad'] is int
-              ? map['prioridad'] as int
-              : int.tryParse(map['prioridad']?.toString() ?? '') ?? 1,
+          priority: e.prioridad,
         );
       }).toList();
 
@@ -82,26 +76,16 @@ class _FamilyScreenState extends State<FamilyScreen> {
     } catch (e) {
       debugPrint('Failed to load contacts: $e');
       if (mounted) {
-        String msg = 'Failed to load contacts';
+        String msg = 'Error al cargar los contactos';
         if (e is ApiException) {
-          try {
-            final body = e.message;
-            final parsed = jsonDecode(body);
-            if (parsed is Map && parsed['message'] != null) {
-              msg = parsed['message'].toString();
-            } else {
-              msg = body;
-            }
-          } catch (_) {
-            msg = e.toString();
-          }
+          msg = e.errors.isNotEmpty
+              ? e.errors.join(', ')
+              : e.message;
         } else {
           msg = e.toString();
         }
 
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(msg)));
+        AppToast.error(context, msg);
       }
 
       setState(() {
@@ -117,17 +101,23 @@ class _FamilyScreenState extends State<FamilyScreen> {
 
     try {
       final ecService = EmergencyContactsService(appApi);
-      final normalized = normalizePhoneForApi(phone);
-      final payload = {
-        'nombre_contacto': name,
-        'telefono_contacto': normalized,
-        'prioridad': int.tryParse(relation) ?? 1,
-      };
+      final payload = CreateEmergencyContactDto(
+        nombreContacto: name,
+        telefonoContacto: phone,
+        prioridad: int.tryParse(relation) ?? 1,
+      );
       await ecService.createContact(payload);
       await _loadContacts();
       return;
     } catch (e) {
       debugPrint('Failed to add contact: $e');
+      if (mounted) {
+        String msg = 'Error al añadir el contacto';
+        if (e is ApiException) {
+          msg = e.errors.isNotEmpty ? e.errors.join('\n') : e.message;
+        }
+        AppToast.error(context, msg);
+      }
     }
   }
 
@@ -154,24 +144,24 @@ class _FamilyScreenState extends State<FamilyScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Add Family Member'),
+        title: const Text('Añadir Familiar'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: nameController,
-              decoration: const InputDecoration(labelText: 'Name'),
+              decoration: const InputDecoration(labelText: 'Nombre'),
             ),
             TextField(
               controller: phoneController,
               decoration: const InputDecoration(
-                labelText: 'Phone (e.g., +1234567890)',
+                labelText: 'Teléfono (ej., +1234567890)',
               ),
               keyboardType: TextInputType.phone,
             ),
             TextField(
               controller: relationController,
-              decoration: const InputDecoration(labelText: 'Priority (1-5)'),
+              decoration: const InputDecoration(labelText: 'Prioridad (1-5)'),
               keyboardType: TextInputType.number,
             ),
           ],
@@ -179,7 +169,7 @@ class _FamilyScreenState extends State<FamilyScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: const Text('Cancelar'),
           ),
           ElevatedButton(
             onPressed: () async {
@@ -188,9 +178,7 @@ class _FamilyScreenState extends State<FamilyScreen> {
               final relation = relationController.text.trim();
 
               if (name.isEmpty || phone.isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Name and phone are required')),
-                );
+                AppToast.warning(context, 'Nombre y teléfono son requeridos');
                 return;
               }
 
@@ -199,20 +187,14 @@ class _FamilyScreenState extends State<FamilyScreen> {
               if (normalized.isEmpty ||
                   normalized.length < 7 ||
                   normalized.length > 30) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Invalid phone number')),
-                );
+                AppToast.warning(context, 'Número de teléfono inválido');
                 return;
               }
 
               // Priority validation: should be an integer 1..5
               final priority = int.tryParse(relation) ?? -1;
               if (priority < 1 || priority > 5) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Priority must be a number between 1 and 5'),
-                  ),
-                );
+                AppToast.warning(context, 'La prioridad debe ser un número entre 1 y 5');
                 return;
               }
 
@@ -220,11 +202,7 @@ class _FamilyScreenState extends State<FamilyScreen> {
               final auth = AuthService(appApi);
               final hasSession = await auth.hasActiveSession();
               if (!hasSession) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Please login to manage emergency contacts'),
-                  ),
-                );
+                AppToast.error(context, 'Por favor, inicia sesión para gestionar los contactos de emergencia');
                 return;
               }
 
@@ -233,11 +211,7 @@ class _FamilyScreenState extends State<FamilyScreen> {
                   .toList();
               // Check max 5 contacts
               if (existing.length >= 5) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Maximum of 5 contacts allowed'),
-                  ),
-                );
+                AppToast.warning(context, 'Máximo de 5 contactos permitidos');
                 return;
               }
               // Check duplicates by normalized phone
@@ -245,11 +219,7 @@ class _FamilyScreenState extends State<FamilyScreen> {
               for (final m in existing) {
                 final existingNorm = normalizePhoneForApi(m.phone);
                 if (existingNorm == incomingNorm) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Contact with this phone already exists'),
-                    ),
-                  );
+                  AppToast.warning(context, 'Ya existe un contacto con este teléfono');
                   return;
                 }
               }
@@ -257,7 +227,7 @@ class _FamilyScreenState extends State<FamilyScreen> {
               await _addContact(name, phone, relation);
               if (mounted) Navigator.pop(context);
             },
-            child: const Text('Add'),
+            child: const Text('Añadir'),
           ),
         ],
       ),
@@ -270,7 +240,7 @@ class _FamilyScreenState extends State<FamilyScreen> {
       backgroundColor: AppTheme.background,
       appBar: AppBar(
         title: const Text(
-          'My Family',
+          'Mi Familia',
           style: TextStyle(color: AppTheme.textDark),
         ),
         backgroundColor: Colors.transparent,
@@ -282,7 +252,7 @@ class _FamilyScreenState extends State<FamilyScreen> {
           : !_hasSession
           ? const Center(
               child: Text(
-                'Login required to manage emergency contacts.',
+                'Se requiere iniciar sesión para gestionar los contactos de emergencia.',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: AppTheme.textLight),
               ),
@@ -290,7 +260,7 @@ class _FamilyScreenState extends State<FamilyScreen> {
           : _familyMembers.isEmpty
           ? const Center(
               child: Text(
-                'No emergency contacts added.\nTap + to add contacts.',
+                'No se han añadido contactos de emergencia.\nToca + para añadir contactos.',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: AppTheme.textLight),
               ),
@@ -342,7 +312,7 @@ class _FamilyScreenState extends State<FamilyScreen> {
                                 ),
                                 if (member.priority > 0)
                                   Text(
-                                    'Priority ${member.priority}',
+                                    'Prioridad ${member.priority}',
                                     style: const TextStyle(
                                       color: AppTheme.textLight,
                                       fontSize: 14,

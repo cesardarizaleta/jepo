@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import '../models/user.dart';
 import '../services/api_client.dart';
 import '../services/auth_service.dart';
+import 'diagnostics_screen.dart';
 import 'login_screen.dart';
 import 'edit_profile_screen.dart';
 import 'notifications_settings_screen.dart';
@@ -17,7 +19,7 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  Map<String, dynamic>? _user;
+  User? _user;
   bool _loading = true;
 
   @override
@@ -50,7 +52,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       backgroundColor: AppTheme.background,
       appBar: AppBar(
         title: const Text(
-          'Profile',
+          'Perfil',
           style: TextStyle(color: AppTheme.textDark),
         ),
         backgroundColor: Colors.transparent,
@@ -84,11 +86,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       color: AppTheme.textDark,
                     ),
                   ),
-                  if (_user?['email'] != null)
+                  if (_user?.email != null)
                     Padding(
                       padding: const EdgeInsets.only(top: 8.0),
                       child: Text(
-                        _user!['email'].toString(),
+                        _user!.email!,
                         style: const TextStyle(
                           color: AppTheme.textLight,
                           fontSize: 16,
@@ -113,7 +115,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   // Options
                   _buildProfileOption(
                     context,
-                    'Edit Profile',
+                    'Editar Perfil',
                     Icons.edit,
                     onPressed: () async {
                       final res = await Navigator.push(
@@ -129,7 +131,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   _buildProfileOption(
                     context,
-                    'Notifications',
+                    'Notificaciones',
                     Icons.notifications,
                     onPressed: () => Navigator.push(
                       context,
@@ -140,7 +142,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   _buildProfileOption(
                     context,
-                    'Privacy & Security',
+                    'Privacidad y Seguridad',
                     Icons.security,
                     onPressed: () => Navigator.push(
                       context,
@@ -151,7 +153,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   _buildProfileOption(
                     context,
-                    'Help & Support',
+                    'Ayuda y Soporte',
                     Icons.help,
                     onPressed: () => Navigator.push(
                       context,
@@ -160,7 +162,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   _buildProfileOption(
                     context,
-                    'Logout',
+                    'Diagnósticos',
+                    Icons.bug_report,
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const DiagnosticsScreen(),
+                      ),
+                    ),
+                  ),
+                  _buildProfileOption(
+                    context,
+                    'Cerrar Sesión',
                     Icons.logout,
                     isDestructive: true,
                     onPressed: () async {
@@ -183,15 +196,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   String _displayName() {
     if (_user == null) return 'Usuario';
-    final n = _user!['nombre']?.toString() ?? '';
-    final a = _user!['apellido']?.toString() ?? '';
+    final n = _user!.nombre ?? '';
+    final a = _user!.apellido ?? '';
     final full = [n, a].where((s) => s.isNotEmpty).join(' ').trim();
-    return full.isNotEmpty ? full : (_user!['email']?.toString() ?? 'Usuario');
+    return full.isNotEmpty ? full : (_user!.email ?? 'Usuario');
   }
 
   Widget _buildDetailsList() {
     if (_user == null) return const SizedBox.shrink();
-    final entries = _user!.entries.toList();
+    final entries = _user!.toJson().entries.toList();
     return Column(
       children: entries.map((e) {
         final key = e.key.toString();

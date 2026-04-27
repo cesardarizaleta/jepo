@@ -17,6 +17,9 @@ import 'screens/profile_screen.dart';
 import 'screens/pre_alert_confirmation_screen.dart';
 import 'services/background_service.dart';
 import 'screens/login_screen.dart';
+import 'models/user.dart';
+import 'models/incident_alert.dart';
+import 'utils/app_toast.dart';
 import 'dart:async';
 
 Future<void> main() async {
@@ -104,18 +107,33 @@ class SessionGate extends StatefulWidget {
 class _SessionGateState extends State<SessionGate> {
   late final Future<bool> _hasSession;
   StreamSubscription? _unauthorizedSub;
+  StreamSubscription? _logoutSub;
   StreamSubscription<PreAlertRequest>? _preAlertSub;
 
   @override
   void initState() {
     super.initState();
     _hasSession = _determineSession();
-    // Listen for unauthorized events and force a logout -> login screen.
+
+    // Listen for unauthorized events (401) and force navigate to login.
+    // Note: AuthService.logout() is NOT called here because the 401 handler
+    // in ApiClient already cleared the token and SessionEvents prevents
+    // cascading reactions.
     _unauthorizedSub = SessionEvents.onUnauthorized.listen((_) async {
       if (!mounted) return;
+      // Clear local session data without re-broadcasting logout.
       try {
-        await AuthService(appApi).logout();
+        await appApi.clearAccessToken();
       } catch (_) {}
+      if (!mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+        (route) => false,
+      );
+    });
+
+    // Listen for explicit logout events (user-initiated or forced).
+    _logoutSub = SessionEvents.onLogout.listen((_) async {
       if (!mounted) return;
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const LoginScreen()),
@@ -147,9 +165,11 @@ class _SessionGateState extends State<SessionGate> {
   @override
   void dispose() {
     _unauthorizedSub?.cancel();
+    _logoutSub?.cancel();
     _preAlertSub?.cancel();
     super.dispose();
   }
+
 
   Future<bool> _determineSession() async {
     // Wait briefly for `appApi` to initialize (in case initApi took a moment).
@@ -199,7 +219,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  Map<String, dynamic>? _user;
+  User? _user;
   bool _loadingUser = true;
 
   @override
@@ -236,9 +256,7 @@ class _HomeScreenState extends State<HomeScreen> {
         permission = await Geolocator.requestPermission();
         if (permission == LocationPermission.denied) {
           if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Location permission denied')),
-            );
+            AppToast.error(context, 'Permiso de ubicación denegado');
           }
           return;
         }
@@ -249,36 +267,28 @@ class _HomeScreenState extends State<HomeScreen> {
       );
       final url = 'https://maps.google.com/?q=${pos.latitude},${pos.longitude}';
 
-      final payload = <String, dynamic>{
-        'latitud': pos.latitude,
-        'longitud': pos.longitude,
-        'url_audio_contexto': appApi.baseUrl,
-        'fecha_hora': DateTime.now().toUtc().toIso8601String(),
-        'es_proactiva': true,
-      };
+      final payload = CreateIncidentAlertDto(
+        latitud: pos.latitude,
+        longitud: pos.longitude,
+        urlAudioContexto: appApi.baseUrl,
+        fechaHora: DateTime.now().toUtc(),
+        esProactiva: true,
+      );
 
       try {
         final sent = await AlertQueueService(appApi).sendOrQueue(payload);
         if (!sent && context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Alert queued locally and will be retried after login/connectivity.',
-              ),
-            ),
-          );
+          AppToast.warning(context, 'Alerta en cola localmente y se reintentará después de iniciar sesión/conexión.');
         }
       } catch (e) {
         debugPrint('Failed to send/queue alert: $e');
       }
 
-      Share.share('Help! I need assistance. My current location is: $url');
+      Share.share('¡Ayuda! Necesito asistencia. Mi ubicación actual es: $url');
     } catch (e) {
       debugPrint('Error obtaining location: $e');
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not obtain location')),
-        );
+        AppToast.error(context, 'No se pudo obtener la ubicación');
       }
     }
   }
@@ -288,14 +298,7 @@ class _HomeScreenState extends State<HomeScreen> {
     bool? res = await FlutterPhoneDirectCaller.callNumber(number);
 
     if (res != true && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Could not initiate direct call. Please dial 123 manually.',
-          ),
-          backgroundColor: Colors.red,
-        ),
-      );
+      AppToast.error(context, 'No se pudo iniciar la llamada directa. Por favor, marque 123 manualmente.');
     }
   }
 
@@ -325,7 +328,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               );
             },
-            tooltip: 'Telemetry Monitor',
+            tooltip: 'Monitor de Telemetría',
           ),
         ],
       ),
@@ -370,7 +373,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 children: [
                   _buildMenuCard(
                     context,
-                    title: 'Family',
+                    title: 'Familia',
                     icon: Icons.people_outline,
                     onTap: () => Navigator.push(
                       context,
@@ -381,7 +384,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   _buildMenuCard(
                     context,
-                    title: 'Emergency',
+                    title: 'Emergencia',
                     icon: Icons.sos,
                     color: Colors.red,
                     iconColor: Colors.white,
@@ -389,7 +392,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   _buildMenuCard(
                     context,
-                    title: 'Profile',
+                    title: 'Perfil',
                     icon: Icons.person_outline,
                     onTap: () => Navigator.push(
                       context,
@@ -400,7 +403,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   _buildMenuCard(
                     context,
-                    title: 'Share Location',
+                    title: 'Compartir Ubicación',
                     icon: Icons.share_location,
                     onTap: () => _shareLocation(context),
                   ),
@@ -445,39 +448,21 @@ class _HomeScreenState extends State<HomeScreen> {
 
   String _displayName() {
     if (_user == null) return 'Usuario';
-    final n = _user!['nombre'] ?? _user!['name'] ?? _user!['first_name'];
-    final a = _user!['apellido'] ?? _user!['last_name'] ?? _user!['surname'];
-    final nstr = n?.toString() ?? '';
-    final astr = a?.toString() ?? '';
+    final nstr = _user!.nombre ?? '';
+    final astr = _user!.apellido ?? '';
     final full = [nstr, astr].where((s) => s.isNotEmpty).join(' ').trim();
     if (full.isNotEmpty) return full;
-    return _user!['email']?.toString() ?? 'Usuario';
+    return _user!.email ?? 'Usuario';
   }
 
   String _userSummaryLine() {
-    if (_user == null) return 'Everything looks good today.';
-    final email = _findField(['email']);
-    final phone = _findField([
-      'telefono',
-      'telefono_movil',
-      'telefono_contacto',
-      'phone',
-      'mobile',
-      'celular',
-    ]);
+    if (_user == null) return 'Todo se ve bien hoy.';
+    final email = _user!.email;
+    final phone = _user!.telefono;
     final parts = <String>[];
     if (email != null) parts.add(email);
     if (phone != null) parts.add(phone);
-    if (parts.isEmpty) return 'Everything looks good today.';
+    if (parts.isEmpty) return 'Todo se ve bien hoy.';
     return parts.join(' • ');
-  }
-
-  String? _findField(List<String> keys) {
-    if (_user == null) return null;
-    for (final k in keys) {
-      final v = _user![k];
-      if (v != null) return v.toString();
-    }
-    return null;
   }
 }

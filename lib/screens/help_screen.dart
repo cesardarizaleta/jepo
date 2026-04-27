@@ -23,7 +23,7 @@ class HelpScreen extends StatelessWidget {
       backgroundColor: AppTheme.background,
       appBar: AppBar(
         title: const Text(
-          'Help & Support',
+          'Ayuda y Soporte',
           style: TextStyle(color: AppTheme.textDark),
         ),
         backgroundColor: Colors.transparent,
@@ -36,7 +36,7 @@ class HelpScreen extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Help & Support',
+              'Ayuda y Soporte',
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
@@ -45,14 +45,14 @@ class HelpScreen extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             const Text(
-              'If you need assistance with the app, first try restarting the app. If the problem persists, contact support using the button below.',
+              'Si necesita asistencia con la aplicación, primero intente reiniciarla. Si el problema persiste, contacte con soporte técnico usando el botón de abajo.',
               style: TextStyle(color: AppTheme.textLight),
             ),
             const SizedBox(height: 20),
             ElevatedButton.icon(
               onPressed: _contactSupport,
               icon: const Icon(Icons.email),
-              label: const Text('Contact Support'),
+              label: const Text('Contactar con Soporte'),
             ),
           ],
         ),

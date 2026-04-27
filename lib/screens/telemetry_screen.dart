@@ -2,9 +2,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:sensors_plus/sensors_plus.dart';
+import '../services/alert_queue_service.dart';
+import '../services/api_client.dart';
+import '../services/pre_alert_service.dart';
 import '../services/telemetry_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/neumorphic_container.dart';
+import '../utils/app_toast.dart';
 
 class TelemetryScreen extends StatefulWidget {
   const TelemetryScreen({super.key});
@@ -32,6 +36,10 @@ class _TelemetryScreenState extends State<TelemetryScreen> {
   bool _isHighRiskMovement = false;
   String _riskMessage = "Normal";
 
+  // Backend state
+  bool _incidentActive = false;
+  int _pendingAlerts = 0;
+
   @override
   void initState() {
     super.initState();
@@ -39,18 +47,23 @@ class _TelemetryScreenState extends State<TelemetryScreen> {
   }
 
   Future<void> _initTelemetry() async {
+    // Load backend state
+    _incidentActive = PreAlertService.isIncidentActive;
+    if (appApiInitialized) {
+      try {
+        _pendingAlerts = await AlertQueueService(appApi).pendingCount();
+      } catch (_) {}
+    }
+
     final hasPermission = await _telemetryService.requestLocationPermission();
     if (hasPermission) {
       _startListening();
     } else {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Location permission needed for telemetry'),
-          ),
-        );
+        AppToast.error(context, 'Se necesita permiso de ubicación para la telemetría');
       }
     }
+    if (mounted) setState(() {});
   }
 
   void _startListening() {
@@ -93,7 +106,7 @@ class _TelemetryScreenState extends State<TelemetryScreen> {
     if (magnitude > 30.0) {
       setState(() {
         _isHighRiskMovement = true;
-        _riskMessage = "CRITICAL IMPACT DETECTED";
+        _riskMessage = "IMPACTO CRÍTICO DETECTADO";
       });
       // Reset after a delay for demo purposes
       Future.delayed(const Duration(seconds: 3), () {
@@ -106,7 +119,7 @@ class _TelemetryScreenState extends State<TelemetryScreen> {
       });
     } else if (magnitude > 15.0) {
       setState(() {
-        _riskMessage = "High Movement";
+        _riskMessage = "Movimiento Alto";
       });
     } else {
       setState(() {
@@ -130,7 +143,7 @@ class _TelemetryScreenState extends State<TelemetryScreen> {
       backgroundColor: AppTheme.background,
       appBar: AppBar(
         title: const Text(
-          'Telemetry & Risk Monitor',
+          'Monitor de Telemetría y Riesgo',
           style: TextStyle(color: AppTheme.textDark),
         ),
         backgroundColor: Colors.transparent,
@@ -147,32 +160,32 @@ class _TelemetryScreenState extends State<TelemetryScreen> {
             _buildLocationCard(),
             const SizedBox(height: 20),
             _buildSensorCard(
-              title: "Accelerometer (Gravity)",
+              title: "Acelerómetro (Gravedad)",
               data: _accelerometerEvent != null
                   ? "X: ${_accelerometerEvent!.x.toStringAsFixed(2)}\n"
                         "Y: ${_accelerometerEvent!.y.toStringAsFixed(2)}\n"
                         "Z: ${_accelerometerEvent!.z.toStringAsFixed(2)}"
-                  : "Waiting...",
+                  : "Esperando...",
               icon: Icons.speed,
             ),
             const SizedBox(height: 20),
             _buildSensorCard(
-              title: "User Accelerometer (No Gravity)",
+              title: "Acelerómetro de Usuario (Sin Gravedad)",
               data: _userAccelerometerEvent != null
                   ? "X: ${_userAccelerometerEvent!.x.toStringAsFixed(2)}\n"
                         "Y: ${_userAccelerometerEvent!.y.toStringAsFixed(2)}\n"
                         "Z: ${_userAccelerometerEvent!.z.toStringAsFixed(2)}"
-                  : "Waiting...",
+                  : "Esperando...",
               icon: Icons.directions_run,
             ),
             const SizedBox(height: 20),
             _buildSensorCard(
-              title: "Gyroscope",
+              title: "Giroscopio",
               data: _gyroscopeEvent != null
                   ? "X: ${_gyroscopeEvent!.x.toStringAsFixed(2)}\n"
                         "Y: ${_gyroscopeEvent!.y.toStringAsFixed(2)}\n"
                         "Z: ${_gyroscopeEvent!.z.toStringAsFixed(2)}"
-                  : "Waiting...",
+                  : "Esperando...",
               icon: Icons.rotate_right,
             ),
           ],
@@ -187,7 +200,7 @@ class _TelemetryScreenState extends State<TelemetryScreen> {
       child: Column(
         children: [
           Text(
-            "SYSTEM STATUS",
+            "ESTADO DEL SISTEMA",
             style: TextStyle(
               fontWeight: FontWeight.bold,
               color: _isHighRiskMovement ? Colors.red : AppTheme.primary,
@@ -204,8 +217,49 @@ class _TelemetryScreenState extends State<TelemetryScreen> {
             ),
             textAlign: TextAlign.center,
           ),
+          const SizedBox(height: 16),
+          const Divider(height: 1),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _buildMiniStatus(
+                'Incidente',
+                _incidentActive ? 'ACTIVO' : 'Ninguno',
+                _incidentActive ? Colors.red : Colors.green,
+              ),
+              _buildMiniStatus(
+                'Cola',
+                '$_pendingAlerts pendiente(s)',
+                _pendingAlerts > 0 ? Colors.orange : Colors.green,
+              ),
+            ],
+          ),
         ],
       ),
+    );
+  }
+
+  Widget _buildMiniStatus(String label, String value, Color color) {
+    return Column(
+      children: [
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 11,
+            color: AppTheme.textLight,
+          ),
+        ),
+      ],
     );
   }
 
@@ -219,7 +273,7 @@ class _TelemetryScreenState extends State<TelemetryScreen> {
               Icon(Icons.location_on, color: AppTheme.primary),
               SizedBox(width: 12),
               Text(
-                "Geolocation",
+                "Geolocalización",
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -232,23 +286,23 @@ class _TelemetryScreenState extends State<TelemetryScreen> {
           const Divider(color: Colors.white),
           const SizedBox(height: 12),
           if (_currentPosition != null) ...[
-            _buildDataRow("Latitude", "${_currentPosition!.latitude}"),
-            _buildDataRow("Longitude", "${_currentPosition!.longitude}"),
+            _buildDataRow("Latitud", "${_currentPosition!.latitude}"),
+            _buildDataRow("Longitud", "${_currentPosition!.longitude}"),
             _buildDataRow(
-              "Altitude",
+              "Altitud",
               "${_currentPosition!.altitude.toStringAsFixed(1)} m",
             ),
             _buildDataRow(
-              "Speed",
+              "Velocidad",
               "${_currentPosition!.speed.toStringAsFixed(1)} m/s",
             ),
             _buildDataRow(
-              "Accuracy",
+              "Precisión",
               "${_currentPosition!.accuracy.toStringAsFixed(1)} m",
             ),
           ] else
             const Text(
-              "Acquiring GPS signal...",
+              "Adquiriendo señal GPS...",
               style: TextStyle(color: AppTheme.textLight),
             ),
         ],

@@ -6,6 +6,7 @@ import '../widgets/neumorphic_container.dart';
 import '../services/api_client.dart';
 import '../services/alert_queue_service.dart';
 import '../services/auth_service.dart';
+import '../utils/app_toast.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -33,9 +34,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final ready = await _ensureApiReady();
     if (!ready) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('API not initialized. Try again.')),
-        );
+        AppToast.error(context, 'API no inicializada. Inténtalo de nuevo.');
       }
       setState(() {
         _isLoading = false;
@@ -64,9 +63,18 @@ class _LoginScreenState extends State<LoginScreen> {
         return;
       }
 
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Login failed: $e')));
+      String errorMsg = 'Error al iniciar sesión';
+      if (e is ApiException) {
+        if (e.errors.isNotEmpty) {
+          errorMsg = e.errors.join('\n');
+        } else {
+          errorMsg = e.message;
+        }
+      } else {
+        errorMsg = e.toString();
+      }
+
+      AppToast.error(context, errorMsg);
     } finally {
       setState(() {
         _isLoading = false;
@@ -124,7 +132,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
                 // Title
                 Text(
-                  'Welcome Back',
+                  'Bienvenido de nuevo',
                   style: Theme.of(context).textTheme.displayLarge?.copyWith(
                     fontSize: 28,
                     color: AppTheme.textDark,
@@ -132,7 +140,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Sign in to continue',
+                  'Inicia sesión para continuar',
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
                 const SizedBox(height: 40),
@@ -140,7 +148,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 // Email Field
                 NeumorphicTextField(
                   controller: _emailController,
-                  hintText: 'Email',
+                  hintText: 'Correo electrónico',
                   icon: Icons.email_outlined,
                 ),
                 const SizedBox(height: 20),
@@ -148,7 +156,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 // Password Field
                 NeumorphicTextField(
                   controller: _passwordController,
-                  hintText: 'Password',
+                  hintText: 'Contraseña',
                   obscureText: true,
                   icon: Icons.lock_outline,
                 ),
@@ -168,7 +176,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                         )
                       : const Text(
-                          'LOGIN',
+                          'INICIAR SESIÓN',
                           style: TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.bold,
@@ -185,7 +193,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     const Text(
-                      "Don't have an account? ",
+                      "¿No tienes una cuenta? ",
                       style: TextStyle(color: AppTheme.textLight),
                     ),
                     GestureDetector(
@@ -198,7 +206,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         );
                       },
                       child: const Text(
-                        'Sign Up',
+                        'Regístrate',
                         style: TextStyle(
                           color: AppTheme.primary,
                           fontWeight: FontWeight.bold,
