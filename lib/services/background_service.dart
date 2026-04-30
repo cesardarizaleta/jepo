@@ -16,21 +16,24 @@ import 'session_events.dart';
 
 // Notification Channel IDs
 const String monitoringChannelId = 'jepo_monitoring';
-const String alertChannelId = 'jepo_alerts';
+const String alertChannelId = 'jepo_alerts_v2';
 const int monitoringNotificationId = 888;
 const int alertNotificationId = 999;
 
 /// Heartbeat interval for location updates during an active incident.
 const Duration _heartbeatInterval = Duration(seconds: 30);
 
-/// Minimum G-force magnitude to trigger an impact detection.
-const double _impactThreshold = 30.0;
+/// Default minimum G-force magnitude to trigger an impact detection.
+double _impactThreshold = 30.0;
 
 /// Debounce window for sensor-triggered impacts.
 const int _impactDebounceSeconds = 3;
 
 /// Key to persist last impact timestamp for debounce across events.
 const String _lastImpactKey = 'jepo_last_impact_at';
+
+/// Key to persist the sensitivity threshold.
+const String _thresholdKey = 'jepo_sensitivity_threshold';
 
 Future<void> initializeService() async {
   final service = FlutterBackgroundService();
@@ -116,10 +119,45 @@ void onStart(ServiceInstance service) async {
 
   await flutterLocalNotificationsPlugin.initialize(initializationSettings);
 
+  // Listen for confirmation response from UI
+  Completer<bool>? confirmationCompleter;
+  service.on('pre_alert_response').listen((event) {
+    if (confirmationCompleter != null && !confirmationCompleter!.isCompleted) {
+      final isSafe = event?['isSafe'] ?? false;
+      confirmationCompleter!.complete(!isSafe); // shouldSend = !isSafe
+    }
+  });
+
+  // Helper to request confirmation via UI
+  Future<bool> requestConfirmationViaUI(int seconds) async {
+    confirmationCompleter = Completer<bool>();
+    
+    // Give the system a moment to bring the activity to front via the UI isolate's native call.
+    await Future.delayed(const Duration(milliseconds: 500));
+    
+    service.invoke('show_pre_alert', {"seconds": seconds});
+    
+    // Wait for response or timeout (safety margin)
+    try {
+      return await confirmationCompleter!.future.timeout(
+        Duration(seconds: seconds + 5),
+        onTimeout: () => true, // Default to send if UI doesn't respond
+      );
+    } catch (_) {
+      return true;
+    } finally {
+      confirmationCompleter = null;
+    }
+  }
+
   // Initialise the API client for background work.
   try {
     await initApi();
     await AlertQueueService(appApi).processQueue();
+    
+    // Load initial threshold
+    final prefs = await SharedPreferences.getInstance();
+    _impactThreshold = prefs.getDouble(_thresholdKey) ?? 30.0;
   } catch (e) {
     debugPrint('Background API init failed: $e');
   }
@@ -128,6 +166,14 @@ void onStart(ServiceInstance service) async {
   service.on('stopService').listen((event) {
     PreAlertService.clearIncident();
     service.stopSelf();
+  });
+
+  // Listen for threshold updates
+  service.on('setThreshold').listen((event) {
+    if (event != null && event['threshold'] != null) {
+      _impactThreshold = (event['threshold'] as num).toDouble();
+      debugPrint('BackgroundService: threshold updated to $_impactThreshold');
+    }
   });
 
   // Listen for session logout to stop ourselves cleanly.
@@ -259,8 +305,25 @@ void onStart(ServiceInstance service) async {
 
         if (PreAlertService.isIncidentActive) {
           debugPrint(
-            'BackgroundService: incident already active, skipping new incident creation',
+            'BackgroundService: incident active, sending impact data as update (heartbeat)',
           );
+          final eventId = _generateEventId();
+          final payload = CreateIncidentAlertDto(
+            latitud: lastKnownPosition!.latitude,
+            longitud: lastKnownPosition!.longitude,
+            urlAudioContexto: appApi.baseUrl,
+            fechaHora: DateTime.now().toUtc(),
+            esProactiva: false, // Heartbeat: updates current incident
+            clientEventId: eventId,
+          );
+          try {
+            await AlertQueueService(appApi).sendOrQueue(
+              payload,
+              bypassConfirmation: true,
+            );
+          } catch (e) {
+            debugPrint('Heartbeat update failed: $e');
+          }
           return;
         }
 
@@ -268,7 +331,9 @@ void onStart(ServiceInstance service) async {
         _showCriticalNotification(flutterLocalNotificationsPlugin);
 
         // NEW: Wait for user confirmation (False Positive check)
-        final shouldSend = await PreAlertService.requestConfirmation(seconds: 5);
+        debugPrint('BackgroundService: Requesting confirmation via UI (5s)...');
+        final shouldSend = await requestConfirmationViaUI(5);
+        debugPrint('BackgroundService: Confirmation result: shouldSend=$shouldSend');
         if (!shouldSend) {
           debugPrint('BackgroundService: User confirmed safe, alert cancelled.');
           // Remove the critical notification if user confirmed safe
@@ -391,12 +456,16 @@ void _showCriticalNotification(
       const NotificationDetails(
         android: AndroidNotificationDetails(
           alertChannelId,
-          'Alertas de Jepo',
+          'Alertas Críticas de Jepo',
           importance: Importance.max,
           priority: Priority.max,
           ongoing: false,
           autoCancel: true,
           fullScreenIntent: true,
+          category: AndroidNotificationCategory.alarm,
+          ticker: 'ALERTA CRÍTICA',
+          visibility: NotificationVisibility.public,
+          audioAttributesUsage: AudioAttributesUsage.alarm,
           icon: '@mipmap/ic_launcher',
           largeIcon: DrawableResourceAndroidBitmap('@mipmap/ic_launcher'),
           color: Colors.red,

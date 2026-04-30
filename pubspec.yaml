@@ -26,6 +26,9 @@ dependencies:
   shared_preferences:
   url_launcher: ^6.3.2
   video_player:
+  google_fonts: ^8.1.0
+  animations: ^2.2.0
+  flutter_animate: ^4.5.2
 
 dev_dependencies:
   flutter_test:

@@ -105,46 +105,110 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           key: _formKey,
           child: Column(
             children: [
+              const SizedBox(height: 10),
               NeumorphicContainer(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(24),
                 child: Column(
                   children: [
-                    TextFormField(
+                    const Text(
+                      'Información Personal',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.textDark,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    _buildTextField(
                       controller: _nombreCtl,
-                      decoration: const InputDecoration(labelText: 'Nombre'),
-                      validator: (v) =>
-                          (v == null || v.trim().isEmpty) ? 'Requerido' : null,
+                      label: 'Nombre',
+                      icon: Icons.person_outline,
                     ),
-                    const SizedBox(height: 12),
-                    TextFormField(
+                    const SizedBox(height: 20),
+                    _buildTextField(
                       controller: _apellidoCtl,
-                      decoration: const InputDecoration(labelText: 'Apellido'),
+                      label: 'Apellido',
+                      icon: Icons.person_outline,
                     ),
-                    const SizedBox(height: 12),
-                    TextFormField(
+                    const SizedBox(height: 20),
+                    _buildTextField(
                       controller: _emailCtl,
-                      decoration: const InputDecoration(labelText: 'Email'),
+                      label: 'Email',
+                      icon: Icons.email_outlined,
                       enabled: false,
                     ),
-                    const SizedBox(height: 12),
-                    TextFormField(
+                    const SizedBox(height: 20),
+                    _buildTextField(
                       controller: _telefonoCtl,
-                      decoration: const InputDecoration(labelText: 'Teléfono'),
+                      label: 'Teléfono',
+                      icon: Icons.phone_outlined,
+                      keyboardType: TextInputType.phone,
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 20),
-              ElevatedButton(
-                onPressed: _saving ? null : _save,
-                child: _saving
-                    ? const CircularProgressIndicator()
-                    : const Text('Guardar'),
+              const SizedBox(height: 40),
+              SizedBox(
+                width: double.infinity,
+                child: NeumorphicButton(
+                  onPressed: _saving ? () {} : _save,
+                  color: AppTheme.primary,
+                  child: _saving
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : const Text(
+                          'GUARDAR CAMBIOS',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
+                ),
               ),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildTextField({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    bool enabled = true,
+    TextInputType? keyboardType,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 8),
+          child: Text(
+            label,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: AppTheme.textLight,
+            ),
+          ),
+        ),
+        NeumorphicTextField(
+          controller: controller,
+          hintText: label,
+          icon: icon,
+          keyboardType: keyboardType,
+          enabled: enabled,
+        ),
+      ],
     );
   }
 }

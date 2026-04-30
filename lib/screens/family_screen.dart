@@ -137,99 +137,13 @@ class _FamilyScreenState extends State<FamilyScreen> {
   }
 
   void _showAddContactDialog() {
-    final nameController = TextEditingController();
-    final phoneController = TextEditingController();
-    final relationController = TextEditingController();
-
-    showDialog(
+    showModalBottomSheet(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Añadir Familiar'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameController,
-              decoration: const InputDecoration(labelText: 'Nombre'),
-            ),
-            TextField(
-              controller: phoneController,
-              decoration: const InputDecoration(
-                labelText: 'Teléfono (ej., +1234567890)',
-              ),
-              keyboardType: TextInputType.phone,
-            ),
-            TextField(
-              controller: relationController,
-              decoration: const InputDecoration(labelText: 'Prioridad (1-5)'),
-              keyboardType: TextInputType.number,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              final name = nameController.text.trim();
-              final phone = phoneController.text.trim();
-              final relation = relationController.text.trim();
-
-              if (name.isEmpty || phone.isEmpty) {
-                AppToast.warning(context, 'Nombre y teléfono son requeridos');
-                return;
-              }
-
-              final normalized = normalizePhoneForApi(phone);
-              // Server expects a numeric string; enforce length 7-30 (docs)
-              if (normalized.isEmpty ||
-                  normalized.length < 7 ||
-                  normalized.length > 30) {
-                AppToast.warning(context, 'Número de teléfono inválido');
-                return;
-              }
-
-              // Priority validation: should be an integer 1..5
-              final priority = int.tryParse(relation) ?? -1;
-              if (priority < 1 || priority > 5) {
-                AppToast.warning(context, 'La prioridad debe ser un número entre 1 y 5');
-                return;
-              }
-
-              // If remote mode / active session, enforce uniqueness and max count
-              final auth = AuthService(appApi);
-              final hasSession = await auth.hasActiveSession();
-              if (!hasSession) {
-                AppToast.error(context, 'Por favor, inicia sesión para gestionar los contactos de emergencia');
-                return;
-              }
-
-              final existing = _familyMembers
-                  .where((m) => m.id != null)
-                  .toList();
-              // Check max 5 contacts
-              if (existing.length >= 5) {
-                AppToast.warning(context, 'Máximo de 5 contactos permitidos');
-                return;
-              }
-              // Check duplicates by normalized phone
-              final incomingNorm = normalized;
-              for (final m in existing) {
-                final existingNorm = normalizePhoneForApi(m.phone);
-                if (existingNorm == incomingNorm) {
-                  AppToast.warning(context, 'Ya existe un contacto con este teléfono');
-                  return;
-                }
-              }
-
-              await _addContact(name, phone, relation);
-              if (mounted) Navigator.pop(context);
-            },
-            child: const Text('Añadir'),
-          ),
-        ],
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _AddContactBottomSheet(
+        onAdd: (name, phone, priority) => _addContact(name, phone, priority.toString()),
+        existingContacts: _familyMembers,
       ),
     );
   }
@@ -257,83 +171,106 @@ class _FamilyScreenState extends State<FamilyScreen> {
                 style: TextStyle(color: AppTheme.textLight),
               ),
             )
-          : _familyMembers.isEmpty
-          ? const Center(
-              child: Text(
-                'No se han añadido contactos de emergencia.\nToca + para añadir contactos.',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: AppTheme.textLight),
-              ),
-            )
-          : ListView.builder(
-              padding: const EdgeInsets.all(20),
-              itemCount: _familyMembers.length,
-              itemBuilder: (context, index) {
-                final member = _familyMembers[index];
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 20),
-                  child: Dismissible(
-                    key: UniqueKey(),
-                    direction: DismissDirection.endToStart,
-                    onDismissed: (_) => _deleteContact(index),
-                    background: Container(
-                      alignment: Alignment.centerRight,
-                      padding: const EdgeInsets.only(right: 20),
-                      color: Colors.red,
-                      child: const Icon(Icons.delete, color: Colors.white),
-                    ),
-                    child: NeumorphicContainer(
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 50,
-                            height: 50,
-                            decoration: BoxDecoration(
-                              color: AppTheme.primaryLight.withOpacity(0.3),
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(
-                              Icons.person,
-                              color: AppTheme.primary,
+          : RefreshIndicator(
+              onRefresh: _loadContacts,
+              color: AppTheme.primary,
+              child: _familyMembers.isEmpty
+                  ? ListView(
+                      children: [
+                        SizedBox(
+                          height: MediaQuery.of(context).size.height * 0.7,
+                          child: const Center(
+                            child: Text(
+                              'No se han añadido contactos de emergencia.\nToca + para añadir contactos.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(color: AppTheme.textLight),
                             ),
                           ),
-                          const SizedBox(width: 20),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  member.name,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16,
-                                    color: AppTheme.textDark,
-                                  ),
-                                ),
-                                if (member.priority > 0)
-                                  Text(
-                                    'Prioridad ${member.priority}',
-                                    style: const TextStyle(
-                                      color: AppTheme.textLight,
-                                      fontSize: 14,
+                        ),
+                      ],
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.all(20),
+                      itemCount: _familyMembers.length,
+                      itemBuilder: (context, index) {
+                        final member = _familyMembers[index];
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 20),
+                          child: Dismissible(
+                            key: ValueKey(member.id ?? member.phone),
+                            direction: DismissDirection.endToStart,
+                            onDismissed: (_) {
+                              final id = member.id;
+                              setState(() {
+                                _familyMembers.removeAt(index);
+                              });
+                              if (id != null) {
+                                EmergencyContactsService(appApi).deleteContact(id);
+                              }
+                            },
+                            background: Container(
+                              alignment: Alignment.centerRight,
+                              padding: const EdgeInsets.only(right: 20),
+                              decoration: BoxDecoration(
+                                color: Colors.red.shade400,
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: const Icon(Icons.delete_outline, color: Colors.white, size: 28),
+                            ),
+                            child: NeumorphicContainer(
+                              useAnimation: false,
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 50,
+                                    height: 50,
+                                    decoration: BoxDecoration(
+                                      color: AppTheme.primaryLight.withOpacity(0.3),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(
+                                      Icons.person,
+                                      color: AppTheme.primary,
                                     ),
                                   ),
-                                Text(
-                                  member.phone,
-                                  style: const TextStyle(
-                                    color: AppTheme.textLight,
-                                    fontSize: 12,
+                                  const SizedBox(width: 20),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          member.name,
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 16,
+                                            color: AppTheme.textDark,
+                                          ),
+                                        ),
+                                        if (member.priority > 0)
+                                          Text(
+                                            'Prioridad ${member.priority}',
+                                            style: const TextStyle(
+                                              color: AppTheme.textLight,
+                                              fontSize: 14,
+                                            ),
+                                          ),
+                                        Text(
+                                          member.phone,
+                                          style: const TextStyle(
+                                            color: AppTheme.textLight,
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
                           ),
-                        ],
-                      ),
+                        );
+                      },
                     ),
-                  ),
-                );
-              },
             ),
       floatingActionButton: FloatingActionButton(
         onPressed: _showAddContactDialog,
@@ -341,5 +278,231 @@ class _FamilyScreenState extends State<FamilyScreen> {
         child: const Icon(Icons.add),
       ),
     );
+  }
+}
+
+class _AddContactBottomSheet extends StatefulWidget {
+  final Function(String name, String phone, int priority) onAdd;
+  final List<_FamilyMember> existingContacts;
+
+  const _AddContactBottomSheet({
+    required this.onAdd,
+    required this.existingContacts,
+  });
+
+  @override
+  State<_AddContactBottomSheet> createState() => _AddContactBottomSheetState();
+}
+
+class _AddContactBottomSheetState extends State<_AddContactBottomSheet> {
+  final _nameController = TextEditingController();
+  final _phoneController = TextEditingController();
+  int _selectedPriority = 3;
+  bool _isLoading = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomPadding = MediaQuery.of(context).viewInsets.bottom;
+
+    return Container(
+      padding: EdgeInsets.only(
+        left: 24,
+        right: 24,
+        top: 32,
+        bottom: 32 + bottomPadding,
+      ),
+      decoration: const BoxDecoration(
+        color: AppTheme.background,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+      ),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppTheme.textLight.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+            const Text(
+              'Añadir Contacto',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: AppTheme.textDark,
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Los contactos de emergencia recibirán alertas cuando se detecte un incidente.',
+              style: TextStyle(color: AppTheme.textLight, fontSize: 14),
+            ),
+            const SizedBox(height: 32),
+            
+            _buildLabel('Nombre completo'),
+            NeumorphicTextField(
+              controller: _nameController,
+              hintText: 'Ej. Juan Pérez',
+              icon: Icons.person_outline,
+            ),
+            const SizedBox(height: 24),
+            
+            _buildLabel('Número de teléfono'),
+            NeumorphicTextField(
+              controller: _phoneController,
+              hintText: '+1234567890',
+              icon: Icons.phone_outlined,
+              keyboardType: TextInputType.phone,
+            ),
+            const SizedBox(height: 24),
+            
+            _buildLabel('Prioridad de contacto'),
+            const SizedBox(height: 8),
+            _buildPrioritySelector(),
+            const SizedBox(height: 40),
+            
+            SizedBox(
+              width: double.infinity,
+              child: NeumorphicButton(
+                onPressed: _isLoading ? () {} : _handleSave,
+                color: AppTheme.primary,
+                child: _isLoading
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2,
+                        ),
+                      )
+                    : const Text(
+                        'AÑADIR FAMILIAR',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLabel(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 4, bottom: 8),
+      child: Text(
+        text,
+        style: const TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.w600,
+          color: AppTheme.textLight,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPrioritySelector() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: List.generate(5, (index) {
+        final priority = index + 1;
+        final isSelected = _selectedPriority >= priority;
+        return GestureDetector(
+          onTap: () => setState(() => _selectedPriority = priority),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppTheme.background,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: isSelected
+                  ? [
+                      BoxShadow(
+                        color: AppTheme.primary.withOpacity(0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 4),
+                      )
+                    ]
+                  : [
+                      BoxShadow(
+                        color: AppTheme.shadowDark.withOpacity(0.1),
+                        blurRadius: 4,
+                        offset: const Offset(2, 2),
+                      ),
+                      const BoxShadow(
+                        color: AppTheme.shadowLight,
+                        blurRadius: 4,
+                        offset: Offset(-2, -2),
+                      ),
+                    ],
+            ),
+            child: Icon(
+              priority <= 2 ? Icons.favorite_border : (priority <= 4 ? Icons.favorite : Icons.local_fire_department),
+              color: isSelected ? AppTheme.primary : AppTheme.textLight,
+              size: 28,
+            ),
+          ),
+        );
+      }),
+    );
+  }
+
+  Future<void> _handleSave() async {
+    final name = _nameController.text.trim();
+    final phone = _phoneController.text.trim();
+
+    if (name.isEmpty || phone.isEmpty) {
+      AppToast.warning(context, 'Nombre y teléfono son requeridos');
+      return;
+    }
+
+    final normalized = normalizePhoneForApi(phone);
+    if (normalized.isEmpty || normalized.length < 7 || normalized.length > 30) {
+      AppToast.warning(context, 'Número de teléfono inválido');
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      final auth = AuthService(appApi);
+      final hasSession = await auth.hasActiveSession();
+      if (!hasSession) {
+        if (mounted) AppToast.error(context, 'Por favor, inicia sesión');
+        return;
+      }
+
+      final existing = widget.existingContacts.where((m) => m.id != null).toList();
+      if (existing.length >= 5) {
+        if (mounted) AppToast.warning(context, 'Máximo de 5 contactos permitidos');
+        return;
+      }
+
+      for (final m in existing) {
+        if (normalizePhoneForApi(m.phone) == normalized) {
+          if (mounted) AppToast.warning(context, 'Ya existe este contacto');
+          return;
+        }
+      }
+
+      await widget.onAdd(name, phone, _selectedPriority);
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      if (mounted) AppToast.error(context, 'Error: $e');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 }

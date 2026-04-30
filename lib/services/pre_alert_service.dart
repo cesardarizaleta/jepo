@@ -43,7 +43,7 @@ class PreAlertService {
 
   /// Duration of the incident window. After this period, the incident is
   /// considered resolved and new detections can create fresh incidents.
-  static const Duration incidentWindow = Duration(minutes: 10);
+  static const Duration incidentWindow = Duration(minutes: 1);
 
   static bool get isIncidentActive {
     if (!_incidentActive) return false;
@@ -84,17 +84,23 @@ class PreAlertService {
   static Future<bool> requestConfirmation({int seconds = 10}) async {
     // If there is no active UI listener, allow send to avoid blocking alarms.
     if (!_controller.hasListener) {
+      print('PreAlertService: No active listeners for confirmation requests!');
       return true;
     }
 
+    print('PreAlertService: Dispatching confirmation request ($seconds s)...');
     final request = PreAlertRequest(seconds: seconds);
     _controller.add(request);
 
     final isSafe = await request.isSafeDecision.timeout(
       Duration(seconds: seconds + 2),
-      onTimeout: () => false,
+      onTimeout: () {
+        print('PreAlertService: Request timed out, assuming unsafe.');
+        return false;
+      },
     );
 
+    print('PreAlertService: Request resolved. isSafe=$isSafe');
     return !isSafe;
   }
 }

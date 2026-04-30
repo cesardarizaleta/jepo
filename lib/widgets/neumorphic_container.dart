@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 
 class NeumorphicContainer extends StatelessWidget {
   final Widget child;
@@ -7,51 +8,67 @@ class NeumorphicContainer extends StatelessWidget {
   final EdgeInsetsGeometry padding;
   final bool isPressed;
   final Color? color;
+  final bool useAnimation;
 
   const NeumorphicContainer({
     super.key,
     required this.child,
-    this.borderRadius = 12.0,
+    this.borderRadius = 16.0,
     this.padding = const EdgeInsets.all(16.0),
     this.isPressed = false,
     this.color,
+    this.useAnimation = true,
   });
 
   @override
   Widget build(BuildContext context) {
     final backgroundColor = color ?? AppTheme.background;
 
-    return Container(
+    Widget content = Container(
       padding: padding,
       decoration: BoxDecoration(
         color: backgroundColor,
         borderRadius: BorderRadius.circular(borderRadius),
         boxShadow: isPressed
             ? [
-                // Inner shadow simulation (not natively supported easily without custom painter or plugins,
-                // so we simulate "pressed" by inverting or flattening)
-                // For simplicity in standard Flutter without plugins:
-                // We'll just reduce elevation or make it flat.
-                // A true inner shadow requires a custom painter or a package.
-                // Let's stick to a "flat" look when pressed for now, or very subtle.
+                BoxShadow(
+                  color: AppTheme.shadowLight.withOpacity(0.5),
+                  offset: const Offset(2, 2),
+                  blurRadius: 4,
+                  spreadRadius: 0,
+                ),
+                BoxShadow(
+                  color: AppTheme.shadowDark.withOpacity(0.2),
+                  offset: const Offset(-2, -2),
+                  blurRadius: 4,
+                  spreadRadius: 0,
+                ),
               ]
             : [
                 BoxShadow(
-                  color: AppTheme.shadowDark.withOpacity(0.3),
-                  offset: const Offset(4, 4),
-                  blurRadius: 10,
+                  color: AppTheme.shadowDark.withOpacity(0.35),
+                  offset: const Offset(6, 6),
+                  blurRadius: 12,
                   spreadRadius: 1,
                 ),
                 const BoxShadow(
                   color: AppTheme.shadowLight,
-                  offset: Offset(-4, -4),
-                  blurRadius: 10,
+                  offset: Offset(-6, -6),
+                  blurRadius: 12,
                   spreadRadius: 1,
                 ),
               ],
       ),
       child: child,
     );
+
+    if (useAnimation) {
+      return content
+          .animate()
+          .fadeIn(duration: 400.ms)
+          .slideY(begin: 0.1, end: 0, curve: Curves.easeOutCubic);
+    }
+    return content;
   }
 }
 
@@ -60,13 +77,15 @@ class NeumorphicButton extends StatefulWidget {
   final VoidCallback onPressed;
   final double borderRadius;
   final Color? color;
+  final EdgeInsetsGeometry? padding;
 
   const NeumorphicButton({
     super.key,
     required this.child,
     required this.onPressed,
-    this.borderRadius = 12.0,
+    this.borderRadius = 16.0,
     this.color,
+    this.padding,
   });
 
   @override
@@ -83,34 +102,21 @@ class _NeumorphicButtonState extends State<NeumorphicButton> {
       onTapUp: (_) => setState(() => _isPressed = false),
       onTapCancel: () => setState(() => _isPressed = false),
       onTap: widget.onPressed,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 100),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: widget.color ?? AppTheme.background,
-          borderRadius: BorderRadius.circular(widget.borderRadius),
-          boxShadow: _isPressed
-              ? [
-                  // "Pressed" state - no shadow or inset simulation
-                  // Simulating inset with a different color or gradient is complex without packages.
-                  // We will just remove the shadow to make it look "pressed into" the surface.
-                ]
-              : [
-                  BoxShadow(
-                    color: AppTheme.shadowDark.withOpacity(0.3),
-                    offset: const Offset(4, 4),
-                    blurRadius: 10,
-                    spreadRadius: 1,
-                  ),
-                  const BoxShadow(
-                    color: AppTheme.shadowLight,
-                    offset: Offset(-4, -4),
-                    blurRadius: 10,
-                    spreadRadius: 1,
-                  ),
-                ],
+      child: AnimatedScale(
+        scale: _isPressed ? 0.97 : 1.0,
+        duration: 100.ms,
+        curve: Curves.easeInOut,
+        child: NeumorphicContainer(
+          padding: EdgeInsets.zero,
+          borderRadius: widget.borderRadius,
+          isPressed: _isPressed,
+          color: widget.color,
+          useAnimation: false,
+          child: Padding(
+            padding: widget.padding ?? const EdgeInsets.all(16),
+            child: widget.child,
+          ),
         ),
-        child: Center(child: widget.child),
       ),
     );
   }
@@ -122,6 +128,8 @@ class NeumorphicTextField extends StatelessWidget {
   final IconData? icon;
   final TextEditingController? controller;
   final TextInputType? keyboardType;
+  final bool enabled;
+  final ValueChanged<String>? onChanged;
 
   const NeumorphicTextField({
     super.key,
@@ -130,6 +138,8 @@ class NeumorphicTextField extends StatelessWidget {
     this.icon,
     this.controller,
     this.keyboardType,
+    this.enabled = true,
+    this.onChanged,
   });
 
   @override
@@ -137,17 +147,13 @@ class NeumorphicTextField extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: AppTheme.background,
-        borderRadius: BorderRadius.circular(12),
-        // Inset shadow simulation for input fields
+        borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
             color: AppTheme.shadowDark.withOpacity(0.2),
             offset: const Offset(2, 2),
             blurRadius: 4,
             spreadRadius: 0,
-            // inset: true // Flutter BoxShadow doesn't support inset.
-            // We usually simulate this by nesting containers or using a package.
-            // For now, we'll use a "pressed" look (no shadow) or a subtle border.
           ),
           const BoxShadow(
             color: AppTheme.shadowLight,
@@ -161,6 +167,11 @@ class NeumorphicTextField extends StatelessWidget {
         controller: controller,
         obscureText: obscureText,
         keyboardType: keyboardType,
+        enabled: enabled,
+        onChanged: onChanged,
+        style: TextStyle(
+          color: enabled ? AppTheme.textDark : AppTheme.textLight,
+        ),
         decoration: InputDecoration(
           border: InputBorder.none,
           hintText: hintText,
@@ -169,7 +180,7 @@ class NeumorphicTextField extends StatelessWidget {
               : null,
           contentPadding: const EdgeInsets.symmetric(
             horizontal: 20,
-            vertical: 16,
+            vertical: 18,
           ),
           hintStyle: const TextStyle(color: AppTheme.textLight),
         ),

@@ -61,42 +61,49 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SizedBox(height: 20),
-                  // Profile Image
-                  NeumorphicContainer(
-                    borderRadius: 100,
-                    padding: const EdgeInsets.all(10),
-                    child: const CircleAvatar(
-                      radius: 50,
-                      backgroundColor: AppTheme.primaryLight,
-                      child: Icon(Icons.person, size: 50, color: Colors.white),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  Text(
-                    _displayName(),
-                    style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: AppTheme.textDark,
-                    ),
-                  ),
-                  if (_user?.email != null)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8.0),
-                      child: Text(
-                        _user!.email!,
-                        style: const TextStyle(
-                          color: AppTheme.textLight,
-                          fontSize: 16,
+          : RefreshIndicator(
+              onRefresh: _loadUser,
+              color: AppTheme.primary,
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 20),
+                    // Profile Image
+                    Hero(
+                      tag: 'profile_image',
+                      child: NeumorphicContainer(
+                        borderRadius: 100,
+                        padding: const EdgeInsets.all(10),
+                        child: const CircleAvatar(
+                          radius: 50,
+                          backgroundColor: AppTheme.primaryLight,
+                          child: Icon(Icons.person, size: 50, color: Colors.white),
                         ),
                       ),
                     ),
+                    const SizedBox(height: 20),
+                    Text(
+                      _displayName(),
+                      style: const TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.textDark,
+                      ),
+                    ),
+                    if (_user?.email != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8.0),
+                        child: Text(
+                          _user!.email!,
+                          style: const TextStyle(
+                            color: AppTheme.textLight,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
                   const SizedBox(height: 24),
 
                   // Full details
@@ -191,61 +198,55 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ],
               ),
             ),
+          ),
     );
   }
 
   String _displayName() {
-    if (_user == null) return 'Usuario';
-    final n = _user!.nombre ?? '';
-    final a = _user!.apellido ?? '';
-    final full = [n, a].where((s) => s.isNotEmpty).join(' ').trim();
-    return full.isNotEmpty ? full : (_user!.email ?? 'Usuario');
+    return _user?.fullName ?? 'Usuario';
   }
 
   Widget _buildDetailsList() {
     if (_user == null) return const SizedBox.shrink();
-    final entries = _user!.toJson().entries.toList();
+    
+    // We only show safe, relevant information as requested.
+    // Sensitive fields like 'id' and 'cedula' are excluded.
+    final items = [
+      _ProfileInfoItem(label: 'Nombre', value: _user!.nombre ?? '—'),
+      _ProfileInfoItem(label: 'Apellido', value: _user!.apellido ?? '—'),
+      _ProfileInfoItem(label: 'Correo', value: _user!.email ?? '—'),
+      _ProfileInfoItem(label: 'Teléfono', value: _user!.telefono ?? '—'),
+    ];
+
     return Column(
-      children: entries.map((e) {
-        final key = e.key.toString();
-        final val = e.value == null ? '—' : e.value.toString();
+      children: items.map((item) {
         return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 6.0),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SizedBox(
-                width: 140,
-                child: Text(
-                  _humanizeKey(key),
+          padding: const EdgeInsets.symmetric(vertical: 8.0),
+          child: NeumorphicContainer(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Row(
+              children: [
+                Text(
+                  item.label,
                   style: const TextStyle(
                     color: AppTheme.textLight,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  val,
-                  style: const TextStyle(color: AppTheme.textDark),
+                const Spacer(),
+                Text(
+                  item.value,
+                  style: const TextStyle(
+                    color: AppTheme.textDark,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         );
       }).toList(),
     );
-  }
-
-  String _humanizeKey(String k) {
-    return k
-        .replaceAll('_', ' ')
-        .splitMapJoin(
-          RegExp(r'\b'),
-          onMatch: (m) => m.group(0)!.toUpperCase(),
-          onNonMatch: (s) => s,
-        );
   }
 
   Widget _buildProfileOption(
@@ -284,4 +285,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
     );
   }
+}
+
+class _ProfileInfoItem {
+  final String label;
+  final String value;
+  _ProfileInfoItem({required this.label, required this.value});
 }

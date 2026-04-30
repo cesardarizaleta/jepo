@@ -2,6 +2,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:sensors_plus/sensors_plus.dart';
+import 'package:flutter_background_service/flutter_background_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../services/alert_queue_service.dart';
 import '../services/api_client.dart';
 import '../services/pre_alert_service.dart';
@@ -39,6 +41,10 @@ class _TelemetryScreenState extends State<TelemetryScreen> {
   // Backend state
   bool _incidentActive = false;
   int _pendingAlerts = 0;
+  
+  // Sensitivity Management
+  double _sensitivityThreshold = 30.0;
+  final String _thresholdKey = 'jepo_sensitivity_threshold';
 
   @override
   void initState() {
@@ -54,6 +60,10 @@ class _TelemetryScreenState extends State<TelemetryScreen> {
         _pendingAlerts = await AlertQueueService(appApi).pendingCount();
       } catch (_) {}
     }
+    
+    // Load saved threshold
+    final prefs = await SharedPreferences.getInstance();
+    _sensitivityThreshold = prefs.getDouble(_thresholdKey) ?? 30.0;
 
     final hasPermission = await _telemetryService.requestLocationPermission();
     if (hasPermission) {
@@ -102,8 +112,7 @@ class _TelemetryScreenState extends State<TelemetryScreen> {
 
     // Standard gravity is ~9.8 m/s^2.
     // Significant deviation might indicate a fall or crash.
-    // This is a VERY basic simplification.
-    if (magnitude > 30.0) {
+    if (magnitude > _sensitivityThreshold) {
       setState(() {
         _isHighRiskMovement = true;
         _riskMessage = "IMPACTO CRÍTICO DETECTADO";
@@ -156,6 +165,8 @@ class _TelemetryScreenState extends State<TelemetryScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _buildStatusCard(),
+            const SizedBox(height: 20),
+            _buildSensitivityCard(),
             const SizedBox(height: 20),
             _buildLocationCard(),
             const SizedBox(height: 20),
@@ -238,6 +249,81 @@ class _TelemetryScreenState extends State<TelemetryScreen> {
         ],
       ),
     );
+  }
+
+  Widget _buildSensitivityCard() {
+    return NeumorphicContainer(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.tune, color: AppTheme.primary),
+              SizedBox(width: 12),
+              Text(
+                "Sensibilidad de Impacto",
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: AppTheme.textDark,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            "Ajusta el umbral de detección de impactos. Menor valor = más sensible.",
+            style: TextStyle(color: AppTheme.textLight, fontSize: 13),
+          ),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              const Text("Más Sensible", style: TextStyle(fontSize: 12, color: AppTheme.textLight)),
+              Expanded(
+                child: Slider(
+                  value: _sensitivityThreshold,
+                  min: 15.0,
+                  max: 60.0,
+                  divisions: 9,
+                  activeColor: AppTheme.primary,
+                  inactiveColor: AppTheme.primaryLight.withOpacity(0.3),
+                  label: _sensitivityThreshold.toStringAsFixed(1),
+                  onChanged: (val) => setState(() => _sensitivityThreshold = val),
+                  onChangeEnd: _updateThreshold,
+                ),
+              ),
+              const Text("Menos Sensible", style: TextStyle(fontSize: 12, color: AppTheme.textLight)),
+            ],
+          ),
+          Center(
+            child: Text(
+              "Umbral actual: ${_sensitivityThreshold.toStringAsFixed(1)} G",
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                color: AppTheme.primary,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _updateThreshold(double val) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble(_thresholdKey, val);
+    
+    // Notify Background Service
+    try {
+      final service = FlutterBackgroundService();
+      service.invoke('setThreshold', {"threshold": val});
+    } catch (e) {
+      debugPrint('Error notifying background service: $e');
+    }
+    
+    if (mounted) {
+      AppToast.success(context, 'Sensibilidad actualizada');
+    }
   }
 
   Widget _buildMiniStatus(String label, String value, Color color) {

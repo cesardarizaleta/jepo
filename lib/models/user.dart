@@ -76,6 +76,13 @@ class User {
     };
   }
 
+  String get fullName {
+    final n = nombre ?? '';
+    final a = apellido ?? '';
+    final full = [n, a].where((s) => s.isNotEmpty).join(' ').trim();
+    return full.isNotEmpty ? full : (email ?? 'Usuario');
+  }
+
   static int? _toInt(dynamic value) {
     if (value is int) return value;
     return int.tryParse(value?.toString() ?? '');

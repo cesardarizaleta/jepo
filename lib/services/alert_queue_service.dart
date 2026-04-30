@@ -45,7 +45,7 @@ class AlertQueueService {
 
   /// Incident cooldown: minimum seconds between two independent incident
   /// creations. Location heartbeats during an active incident bypass this.
-  static const int _incidentCooldownSeconds = 600; // 10 minutes
+  static const int _incidentCooldownSeconds = 60; // 1 minute
 
   /// Maximum number of retries before a queued item is dropped permanently.
   static const int _maxRetries = 5;

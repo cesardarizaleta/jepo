@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter/foundation.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:geolocator/geolocator.dart';
@@ -9,18 +11,21 @@ import 'services/session_events.dart';
 import 'services/pre_alert_service.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:flutter_phone_direct_caller/flutter_phone_direct_caller.dart';
+import 'package:flutter_background_service/flutter_background_service.dart';
 import 'theme/app_theme.dart';
 import 'widgets/neumorphic_container.dart';
 import 'screens/telemetry_screen.dart';
 import 'screens/family_screen.dart';
 import 'screens/profile_screen.dart';
-import 'screens/pre_alert_confirmation_screen.dart';
 import 'services/background_service.dart';
 import 'screens/login_screen.dart';
+import 'screens/onboarding_screen.dart';
+import 'screens/pre_alert_screen.dart';
 import 'models/user.dart';
 import 'models/incident_alert.dart';
 import 'utils/app_toast.dart';
 import 'dart:async';
+import 'package:shared_preferences/shared_preferences.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -80,6 +85,12 @@ Future<void> _requestStartupPermissions() async {
       await Permission.locationAlways.request();
     }
   }
+
+  // 4. Request System Alert Window (Display over other apps)
+  // This is critical for bringing the app to foreground on Android 10+
+  if (await Permission.systemAlertWindow.isDenied) {
+    await Permission.systemAlertWindow.request();
+  }
 }
 
 class MainApp extends StatelessWidget {
@@ -109,6 +120,9 @@ class _SessionGateState extends State<SessionGate> {
   StreamSubscription? _unauthorizedSub;
   StreamSubscription? _logoutSub;
   StreamSubscription<PreAlertRequest>? _preAlertSub;
+  StreamSubscription? _serviceSub;
+  static const _foregroundChannel = MethodChannel('com.example.jepo/foreground');
+  bool _onboardingDone = false;
 
   @override
   void initState() {
@@ -147,18 +161,38 @@ class _SessionGateState extends State<SessionGate> {
         return;
       }
 
-      final result = await Navigator.of(context).push<bool>(
-        PageRouteBuilder(
-          opaque: true,
-          barrierDismissible: false,
-          pageBuilder: (context, animation, secondaryAnimation) =>
-              PreAlertConfirmationScreen(seconds: request.seconds),
-          transitionDuration: Duration.zero,
-          reverseTransitionDuration: Duration.zero,
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => PreAlertScreen(request: request),
+          fullscreenDialog: true,
         ),
       );
+    });
 
-      request.resolveAsSafe(result == true);
+    // Bridge messages from Background Service to PreAlertService
+    final service = FlutterBackgroundService();
+    _serviceSub = service.on('show_pre_alert').listen((event) async {
+      debugPrint('MainApp: Received show_pre_alert event from background service');
+      if (!mounted) {
+        debugPrint('MainApp: SessionGate not mounted, ignoring pre-alert');
+        return;
+      }
+      final seconds = event?['seconds'] ?? 5;
+      debugPrint('MainApp: Received request for $seconds seconds pre-alert');
+      
+      // Force app to foreground on Android via MethodChannel
+      // The logs show the UI isolate is active, so we can trigger the native wakeup here.
+      _foregroundChannel.invokeMethod('bringToForeground').catchError((e) {
+        debugPrint('MainApp: bringToForeground failed: $e');
+      });
+
+      // Use microtask to ensure we don't block the listener isolate
+      Future.microtask(() async {
+        debugPrint('MainApp: Triggering PreAlertService.requestConfirmation...');
+        final result = await PreAlertService.requestConfirmation(seconds: seconds);
+        debugPrint('MainApp: Confirmation result: $result');
+        service.invoke('pre_alert_response', {"isSafe": !result});
+      });
     });
   }
 
@@ -167,6 +201,7 @@ class _SessionGateState extends State<SessionGate> {
     _unauthorizedSub?.cancel();
     _logoutSub?.cancel();
     _preAlertSub?.cancel();
+    _serviceSub?.cancel();
     super.dispose();
   }
 
@@ -191,8 +226,8 @@ class _SessionGateState extends State<SessionGate> {
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<bool>(
-      future: _hasSession,
+    return FutureBuilder<List<bool>>(
+      future: Future.wait([_hasSession, _checkOnboarding()]),
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
           return const Scaffold(
@@ -200,7 +235,15 @@ class _SessionGateState extends State<SessionGate> {
           );
         }
 
-        final hasSession = snapshot.data ?? false;
+        final hasSession = snapshot.data![0];
+        final onboardingDone = snapshot.data![1];
+
+        if (!onboardingDone) {
+          return OnboardingScreen(
+            onFinished: () => setState(() => _onboardingDone = true),
+          );
+        }
+
         if (hasSession) {
           return const HomeScreen();
         }
@@ -208,6 +251,11 @@ class _SessionGateState extends State<SessionGate> {
         return const LoginScreen();
       },
     );
+  }
+
+  Future<bool> _checkOnboarding() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool('onboarding_done') ?? false;
   }
 }
 
@@ -262,43 +310,92 @@ class _HomeScreenState extends State<HomeScreen> {
         }
       }
 
+      // Show premium loading indicator
+      if (!context.mounted) return;
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => Center(
+          child: NeumorphicContainer(
+            padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 30),
+            borderRadius: 30,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(
+                  width: 50,
+                  height: 50,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 3,
+                    valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primary),
+                  ),
+                ).animate(onPlay: (controller) => controller.repeat())
+                 .shimmer(duration: 1200.ms, color: Colors.white24),
+                const SizedBox(height: 25),
+                const Text(
+                  'PREPARANDO',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 2,
+                    fontSize: 12,
+                    color: AppTheme.textLight,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Tu Ubicación',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                    color: AppTheme.textDark,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ).animate().fadeIn(duration: 300.ms).scale(begin: const Offset(0.9, 0.9)),
+      );
+
       final pos = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.best,
       );
       final url = 'https://maps.google.com/?q=${pos.latitude},${pos.longitude}';
 
-      final payload = CreateIncidentAlertDto(
-        latitud: pos.latitude,
-        longitud: pos.longitude,
-        urlAudioContexto: appApi.baseUrl,
-        fechaHora: DateTime.now().toUtc(),
-        esProactiva: true,
-      );
-
-      try {
-        final sent = await AlertQueueService(appApi).sendOrQueue(payload);
-        if (!sent && context.mounted) {
-          AppToast.warning(context, 'Alerta en cola localmente y se reintentará después de iniciar sesión/conexión.');
-        }
-      } catch (e) {
-        debugPrint('Failed to send/queue alert: $e');
+      // Close loading indicator
+      if (context.mounted) {
+        Navigator.of(context).pop();
       }
 
       Share.share('¡Ayuda! Necesito asistencia. Mi ubicación actual es: $url');
     } catch (e) {
       debugPrint('Error obtaining location: $e');
       if (context.mounted) {
+        // Ensure dialog is closed if it was opened
+        Navigator.of(context).pop();
         AppToast.error(context, 'No se pudo obtener la ubicación');
       }
     }
   }
 
   Future<void> _callEmergency(BuildContext context) async {
-    const number = '123'; // Emergency number
+    const number = '911'; // Emergency number
+    
+    // Check and request phone permission if needed
+    final status = await Permission.phone.status;
+    if (!status.isGranted) {
+      final request = await Permission.phone.request();
+      if (!request.isGranted) {
+        if (context.mounted) {
+          AppToast.error(context, 'Permiso de llamada denegado. Por favor, marque 911 manualmente.');
+        }
+        return;
+      }
+    }
+
     bool? res = await FlutterPhoneDirectCaller.callNumber(number);
 
     if (res != true && context.mounted) {
-      AppToast.error(context, 'No se pudo iniciar la llamada directa. Por favor, marque 123 manualmente.');
+      AppToast.error(context, 'No se pudo iniciar la llamada directa. Por favor, marque 911 manualmente.');
     }
   }
 
@@ -381,7 +478,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         builder: (context) => const FamilyScreen(),
                       ),
                     ),
-                  ),
+                  ).animate().fadeIn(delay: 100.ms).scale(curve: Curves.easeOutBack),
                   _buildMenuCard(
                     context,
                     title: 'Emergencia',
@@ -389,7 +486,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     color: Colors.red,
                     iconColor: Colors.white,
                     onTap: () => _callEmergency(context),
-                  ),
+                  ).animate().fadeIn(delay: 200.ms).scale(curve: Curves.easeOutBack),
                   _buildMenuCard(
                     context,
                     title: 'Perfil',
@@ -400,13 +497,13 @@ class _HomeScreenState extends State<HomeScreen> {
                         builder: (context) => const ProfileScreen(),
                       ),
                     ),
-                  ),
+                  ).animate().fadeIn(delay: 300.ms).scale(curve: Curves.easeOutBack),
                   _buildMenuCard(
                     context,
                     title: 'Compartir Ubicación',
                     icon: Icons.share_location,
                     onTap: () => _shareLocation(context),
-                  ),
+                  ).animate().fadeIn(delay: 400.ms).scale(curve: Curves.easeOutBack),
                 ],
               ),
             ),
@@ -430,7 +527,12 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, size: 40, color: iconColor ?? AppTheme.primary),
+          title == 'Perfil'
+              ? Hero(
+                  tag: 'profile_image',
+                  child: Icon(icon, size: 40, color: iconColor ?? AppTheme.primary),
+                )
+              : Icon(icon, size: 40, color: iconColor ?? AppTheme.primary),
           const SizedBox(height: 16),
           Text(
             title,
@@ -447,12 +549,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   String _displayName() {
-    if (_user == null) return 'Usuario';
-    final nstr = _user!.nombre ?? '';
-    final astr = _user!.apellido ?? '';
-    final full = [nstr, astr].where((s) => s.isNotEmpty).join(' ').trim();
-    if (full.isNotEmpty) return full;
-    return _user!.email ?? 'Usuario';
+    return _user?.fullName ?? 'Usuario';
   }
 
   String _userSummaryLine() {
