@@ -13,6 +13,10 @@ import 'alerts_service.dart';
 import 'diagnostic_log_service.dart';
 import 'pre_alert_service.dart';
 import 'session_events.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+/// Notification ID for the pre-alert fullscreen intent notification.
+const int preAlertNotificationId = 997;
 
 // Notification Channel IDs
 const String monitoringChannelId = 'jepo_monitoring';
@@ -34,6 +38,10 @@ const String _lastImpactKey = 'jepo_last_impact_at';
 
 /// Key to persist the sensitivity threshold.
 const String _thresholdKey = 'jepo_sensitivity_threshold';
+
+/// In-memory flag to strictly prevent race conditions during impacts
+bool _isConfirmingMemory = false;
+DateTime? _lastImpactMemory;
 
 Future<void> initializeService() async {
   final service = FlutterBackgroundService();
@@ -119,34 +127,108 @@ void onStart(ServiceInstance service) async {
 
   await flutterLocalNotificationsPlugin.initialize(initializationSettings);
 
-  // Listen for confirmation response from UI
+  // Listen for confirmation response from UI (via background service IPC)
   Completer<bool>? confirmationCompleter;
   service.on('pre_alert_response').listen((event) {
+    debugPrint('BackgroundService: received pre_alert_response: $event');
     if (confirmationCompleter != null && !confirmationCompleter!.isCompleted) {
       final isSafe = event?['isSafe'] ?? false;
       confirmationCompleter!.complete(!isSafe); // shouldSend = !isSafe
     }
   });
 
-  // Helper to request confirmation via UI
+  /// Show a fullScreenIntent notification that wakes the screen and launches
+  /// MainActivity with SHOW_PRE_ALERT=true. This is the ONLY reliable way
+  /// on Android 10+ to display UI from the background.
+  Future<void> showPreAlertNotification(int seconds) async {
+    final AndroidNotificationDetails details = AndroidNotificationDetails(
+      alertChannelId,
+      'Alertas de Jepo',
+      channelDescription: 'Alertas de seguridad críticas.',
+      importance: Importance.max,
+      priority: Priority.max,
+      ongoing: false,
+      autoCancel: false,
+      fullScreenIntent: true,
+      category: AndroidNotificationCategory.alarm,
+      ticker: 'ALERTA DE IMPACTO',
+      visibility: NotificationVisibility.public,
+      audioAttributesUsage: AudioAttributesUsage.alarm,
+      icon: '@mipmap/ic_launcher',
+      largeIcon: const DrawableResourceAndroidBitmap('@mipmap/ic_launcher'),
+      color: Colors.red,
+      enableVibration: true,
+      playSound: true,
+      styleInformation: BigTextStyleInformation(
+        '¡IMPACTO DETECTADO! Toca para confirmar que estás bien o se alertará a tus contactos en $seconds segundos.',
+        contentTitle: '⚠️ ¿ESTÁS BIEN?',
+        summaryText: 'Protocolo de Emergencia Activo',
+      ),
+    );
+    try {
+      await flutterLocalNotificationsPlugin.show(
+        preAlertNotificationId,
+        '⚠️ ¿ESTÁS BIEN?',
+        'Toca AHORA para cancelar la alerta — $seconds segundos restantes',
+        NotificationDetails(android: details),
+        payload: 'pre_alert:$seconds',
+      );
+      debugPrint('BackgroundService: Pre-alert fullScreenIntent notification shown');
+    } catch (e) {
+      debugPrint('BackgroundService: Error showing pre-alert notification: $e');
+    }
+  }
+
+  /// Request confirmation from the user.
+  /// Uses a fullScreenIntent notification to wake the screen and bring the app
+  /// to front — the ONLY mechanism that works reliably on Android 10+.
   Future<bool> requestConfirmationViaUI(int seconds) async {
     confirmationCompleter = Completer<bool>();
-    
-    // Give the system a moment to bring the activity to front via the UI isolate's native call.
-    await Future.delayed(const Duration(milliseconds: 500));
-    
+
+    // Store pending pre-alert FIRST (for recovery if app was killed)
+    await PreAlertService.storePendingPreAlert(seconds);
+
+    // 1. Show the fullScreenIntent notification — this wakes the screen and
+    //    launches MainActivity via the system-level fullScreenIntent mechanism,
+    //    bypassing Android 10+ background activity restrictions.
+    await showPreAlertNotification(seconds);
+
+    // 2. FORCE launch the app via Deep Link intent from the background.
+    //    This guarantees Android brings the app to the foreground even if the
+    //    screen is ON, completely bypassing the Heads-Up Notification limit!
+    try {
+      await launchUrl(Uri.parse('jepo://alert'), mode: LaunchMode.externalApplication);
+      debugPrint('BackgroundService: Forced app to foreground via jepo://alert');
+    } catch (e) {
+      debugPrint('BackgroundService: URL launch failed: $e');
+    }
+
+    // 3. Also ping the UI isolate in case the app is already in the foreground
+    //    and doesn't need the fullScreenIntent to bring it up.
     service.invoke('show_pre_alert', {"seconds": seconds});
-    
-    // Wait for response or timeout (safety margin)
+
+    // 3. Wait for the user's response. Timeout = seconds + 25s to give enough
+    //    time for the notification to appear, user to see it, and respond.
+    //    If no response, default to sending the alert (assume unsafe).
     try {
       return await confirmationCompleter!.future.timeout(
-        Duration(seconds: seconds + 5),
-        onTimeout: () => true, // Default to send if UI doesn't respond
+        Duration(seconds: seconds + 25),
+        onTimeout: () {
+          debugPrint('BackgroundService: Confirmation timed out, assuming unsafe.');
+          return true; // shouldSend = true
+        },
       );
     } catch (_) {
       return true;
     } finally {
+      _isConfirmingMemory = false;
       confirmationCompleter = null;
+      // Clear pending pre-alert now that we have a decision
+      await PreAlertService.clearPendingPreAlert();
+      // Cancel the pre-alert notification
+      try {
+        await flutterLocalNotificationsPlugin.cancel(preAlertNotificationId);
+      } catch (_) {}
     }
   }
 
@@ -154,7 +236,7 @@ void onStart(ServiceInstance service) async {
   try {
     await initApi();
     await AlertQueueService(appApi).processQueue();
-    
+
     // Load initial threshold
     final prefs = await SharedPreferences.getInstance();
     _impactThreshold = prefs.getDouble(_thresholdKey) ?? 30.0;
@@ -268,11 +350,21 @@ void onStart(ServiceInstance service) async {
       double magnitude = (event.x.abs() + event.y.abs() + event.z.abs());
 
       if (magnitude > _impactThreshold) {
-        // Debounce: ignore impacts within the debounce window.
+        // Fast memory check to strictly prevent async race conditions
+        final now = DateTime.now().toUtc();
+        if (_isConfirmingMemory) {
+          return; // Already waiting for user response
+        }
+        if (_lastImpactMemory != null && 
+            now.difference(_lastImpactMemory!) < const Duration(seconds: _impactDebounceSeconds)) {
+          return;
+        }
+        _lastImpactMemory = now;
+
+        // Debounce: sync to SharedPreferences for cross-isolate persistence.
         try {
           final prefs = await SharedPreferences.getInstance();
           final lastImpactStr = prefs.getString(_lastImpactKey);
-          final now = DateTime.now().toUtc();
           if (lastImpactStr != null && lastImpactStr.isNotEmpty) {
             try {
               final lastImpact = DateTime.parse(lastImpactStr).toUtc();
@@ -317,10 +409,9 @@ void onStart(ServiceInstance service) async {
             clientEventId: eventId,
           );
           try {
-            await AlertQueueService(appApi).sendOrQueue(
-              payload,
-              bypassConfirmation: true,
-            );
+            await AlertQueueService(
+              appApi,
+            ).sendOrQueue(payload, bypassConfirmation: true);
           } catch (e) {
             debugPrint('Heartbeat update failed: $e');
           }
@@ -332,10 +423,15 @@ void onStart(ServiceInstance service) async {
 
         // NEW: Wait for user confirmation (False Positive check)
         debugPrint('BackgroundService: Requesting confirmation via UI (5s)...');
+        _isConfirmingMemory = true;
         final shouldSend = await requestConfirmationViaUI(5);
-        debugPrint('BackgroundService: Confirmation result: shouldSend=$shouldSend');
+        debugPrint(
+          'BackgroundService: Confirmation result: shouldSend=$shouldSend',
+        );
         if (!shouldSend) {
-          debugPrint('BackgroundService: User confirmed safe, alert cancelled.');
+          debugPrint(
+            'BackgroundService: User confirmed safe, alert cancelled.',
+          );
           // Remove the critical notification if user confirmed safe
           await flutterLocalNotificationsPlugin.cancel(alertNotificationId);
           return;
@@ -354,10 +450,9 @@ void onStart(ServiceInstance service) async {
         );
 
         try {
-          final sent = await AlertQueueService(appApi).sendOrQueue(
-            payload,
-            bypassConfirmation: true,
-          );
+          final sent = await AlertQueueService(
+            appApi,
+          ).sendOrQueue(payload, bypassConfirmation: true);
           if (sent) {
             // Alert was created successfully.
             final incId = await AlertQueueService(appApi).activeIncidentId;
@@ -445,9 +540,7 @@ String _generateEventId() {
 }
 
 /// Show the critical impact alert notification.
-void _showCriticalNotification(
-  FlutterLocalNotificationsPlugin plugin,
-) {
+void _showCriticalNotification(FlutterLocalNotificationsPlugin plugin) {
   try {
     plugin.show(
       alertNotificationId,

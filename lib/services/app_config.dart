@@ -27,10 +27,11 @@ class AppConfig {
     var dotenvLoaded = false;
 
     // Production should rely on --dart-define or secure storage values.
-    // Dotenv remains a developer convenience.
+    // Dotenv remains a developer convenience. We enable it by default now
+    // as per user request to use .env in production.
     final shouldTryDotenv = _readEnvBool(
       const String.fromEnvironment('JEPO_ENABLE_DOTENV'),
-      defaultValue: kDebugMode,
+      defaultValue: true,
     );
 
     if (shouldTryDotenv) {

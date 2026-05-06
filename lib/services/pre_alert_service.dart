@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:shared_preferences/shared_preferences.dart';
+
 class PreAlertRequest {
   final int seconds;
   final Completer<bool> _completer = Completer<bool>();
@@ -28,6 +30,10 @@ class PreAlertService {
   static final StreamController<PreAlertRequest> _controller =
       StreamController<PreAlertRequest>.broadcast();
 
+  static const String _pendingSecondsKey = 'jepo_pending_pre_alert_seconds';
+  static const String _pendingExpiresAtKey =
+      'jepo_pending_pre_alert_expires_at';
+
   static Stream<PreAlertRequest> get onRequest => _controller.stream;
 
   /// Whether an incident is currently active (detection confirmed, waiting
@@ -40,6 +46,9 @@ class PreAlertService {
 
   /// The incident ID returned by the backend after creation.
   static int? _activeIncidentId;
+
+  /// Tracks an ongoing UI request to avoid popping multiple screens if pinged multiple times
+  static Future<bool>? _currentRequestFuture;
 
   /// Duration of the incident window. After this period, the incident is
   /// considered resolved and new detections can create fresh incidents.
@@ -77,6 +86,46 @@ class PreAlertService {
     _activeIncidentId = null;
   }
 
+  static Future<void> storePendingPreAlert(int seconds) async {
+    final prefs = await SharedPreferences.getInstance();
+    // Keep the pending alert alive long enough for the user to see the notification
+    // and open the app. Must be >= background service timeout (seconds + 25).
+    final expiresAt = DateTime.now().toUtc().add(
+      Duration(seconds: seconds + 35),
+    );
+    await prefs.setInt(_pendingSecondsKey, seconds);
+    await prefs.setString(_pendingExpiresAtKey, expiresAt.toIso8601String());
+  }
+
+  static Future<int?> takePendingPreAlert() async {
+    final prefs = await SharedPreferences.getInstance();
+    final seconds = prefs.getInt(_pendingSecondsKey);
+    final expiresAtRaw = prefs.getString(_pendingExpiresAtKey);
+
+    await clearPendingPreAlert();
+
+    if (seconds == null || expiresAtRaw == null) {
+      return null;
+    }
+
+    final expiresAt = DateTime.tryParse(expiresAtRaw)?.toUtc();
+    if (expiresAt == null) {
+      return null;
+    }
+
+    if (DateTime.now().toUtc().isAfter(expiresAt)) {
+      return null;
+    }
+
+    return seconds;
+  }
+
+  static Future<void> clearPendingPreAlert() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_pendingSecondsKey);
+    await prefs.remove(_pendingExpiresAtKey);
+  }
+
   /// Returns true when alert should be sent, false when user confirmed safe.
   ///
   /// If there is no active UI listener (e.g. screen is off / background),
@@ -88,6 +137,20 @@ class PreAlertService {
       return true;
     }
 
+    if (_currentRequestFuture != null) {
+      print(
+        'PreAlertService: Request already in progress, ignoring duplicate trigger.',
+      );
+      return _currentRequestFuture!;
+    }
+
+    _currentRequestFuture = _doRequestConfirmation(seconds: seconds);
+    final result = await _currentRequestFuture!;
+    _currentRequestFuture = null;
+    return result;
+  }
+
+  static Future<bool> _doRequestConfirmation({required int seconds}) async {
     print('PreAlertService: Dispatching confirmation request ($seconds s)...');
     final request = PreAlertRequest(seconds: seconds);
     _controller.add(request);

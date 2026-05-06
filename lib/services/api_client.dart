@@ -124,7 +124,9 @@ class ApiClient {
     String? apiKeyHeaderNameOverride,
   }) async {
     final client = http.Client();
-    final storage = const FlutterSecureStorage();
+    const storage = FlutterSecureStorage(
+      aOptions: AndroidOptions(encryptedSharedPreferences: true),
+    );
 
     final config = await AppConfig.load(
       baseUrlOverride: baseUrlOverride,
@@ -132,29 +134,40 @@ class ApiClient {
       apiKeyHeaderNameOverride: apiKeyHeaderNameOverride,
     );
 
-    // Persist resolved config so background isolates can reuse values.
-    final existingKey = await storage.read(key: _storageApiKey);
-    if ((existingKey == null || existingKey.isEmpty) &&
-        config.apiKey != null &&
-        config.apiKey!.isNotEmpty) {
-      await storage.write(key: _storageApiKey, value: config.apiKey!);
-    }
+    try {
+      // Persist resolved config so background isolates can reuse values.
+      final existingKey = await storage.read(key: _storageApiKey);
+      if ((existingKey == null || existingKey.isEmpty) &&
+          config.apiKey != null &&
+          config.apiKey!.isNotEmpty) {
+        await storage.write(key: _storageApiKey, value: config.apiKey!);
+      }
 
-    final existingHeader = await storage.read(key: _storageApiKeyHeader);
-    if ((existingHeader == null || existingHeader.isEmpty) &&
-        config.apiKeyHeaderName.isNotEmpty) {
-      await storage.write(
-        key: _storageApiKeyHeader,
-        value: config.apiKeyHeaderName,
-      );
+      final existingHeader = await storage.read(key: _storageApiKeyHeader);
+      if ((existingHeader == null || existingHeader.isEmpty) &&
+          config.apiKeyHeaderName.isNotEmpty) {
+        await storage.write(
+          key: _storageApiKeyHeader,
+          value: config.apiKeyHeaderName,
+        );
+      }
+    } catch (e) {
+      debugPrint('Failed to interact with secure storage during init: $e');
+      try {
+        await storage.deleteAll();
+      } catch (_) {}
     }
 
     return ApiClient._(client, storage, config, config.baseUrl);
   }
 
   Future<String?> _getApiKey() async {
-    final stored = await _secureStorage.read(key: _storageApiKey);
-    if (stored != null && stored.isNotEmpty) return stored;
+    try {
+      final stored = await _secureStorage.read(key: _storageApiKey);
+      if (stored != null && stored.isNotEmpty) return stored;
+    } catch (e) {
+      debugPrint('Error reading API key: $e');
+    }
 
     if (_config.apiKey != null && _config.apiKey!.isNotEmpty) {
       return _config.apiKey;
@@ -164,8 +177,12 @@ class ApiClient {
   }
 
   Future<String> _getApiKeyHeaderName() async {
-    final stored = await _secureStorage.read(key: _storageApiKeyHeader);
-    if (stored != null && stored.isNotEmpty) return stored;
+    try {
+      final stored = await _secureStorage.read(key: _storageApiKeyHeader);
+      if (stored != null && stored.isNotEmpty) return stored;
+    } catch (e) {
+      debugPrint('Error reading API key header: $e');
+    }
 
     return _config.apiKeyHeaderName;
   }
@@ -223,15 +240,28 @@ class ApiClient {
   }
 
   Future<void> saveAccessToken(String token) async {
-    await _secureStorage.write(key: _storageAccessToken, value: token);
+    try {
+      await _secureStorage.write(key: _storageAccessToken, value: token);
+    } catch (e) {
+      debugPrint('Error saving access token: $e');
+    }
   }
 
   Future<String?> getAccessToken() async {
-    return _secureStorage.read(key: _storageAccessToken);
+    try {
+      return await _secureStorage.read(key: _storageAccessToken);
+    } catch (e) {
+      debugPrint('Error reading access token: $e');
+      return null;
+    }
   }
 
   Future<void> clearAccessToken() async {
-    await _secureStorage.delete(key: _storageAccessToken);
+    try {
+      await _secureStorage.delete(key: _storageAccessToken);
+    } catch (e) {
+      debugPrint('Error clearing access token: $e');
+    }
   }
 
   Future<void> _onUnauthorized() async {
