@@ -4,6 +4,7 @@ import '../services/api_client.dart';
 import '../services/auth_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/neumorphic_container.dart';
+import '../widgets/jepo_phone_input.dart';
 import '../utils/app_toast.dart';
 
 class EditProfileScreen extends StatefulWidget {
@@ -138,11 +139,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       enabled: false,
                     ),
                     const SizedBox(height: 20),
-                    _buildTextField(
+                    JepoPhoneInput(
                       controller: _telefonoCtl,
-                      label: 'Teléfono',
-                      icon: Icons.phone_outlined,
-                      keyboardType: TextInputType.phone,
+                      label: 'Numero de telefono',
                     ),
                   ],
                 ),

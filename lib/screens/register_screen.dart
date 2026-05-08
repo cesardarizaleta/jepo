@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../main.dart';
 import '../theme/app_theme.dart';
 import '../widgets/neumorphic_container.dart';
+import '../widgets/jepo_phone_input.dart';
 import '../services/alert_queue_service.dart';
 import '../services/api_client.dart';
 import '../services/auth_service.dart';
@@ -204,11 +205,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 ),
                 const SizedBox(height: 20),
 
-                // Phone Field
-                NeumorphicTextField(
+                JepoPhoneInput(
                   controller: _phoneController,
-                  hintText: 'Teléfono',
-                  icon: Icons.phone,
+                  label: 'Numero de telefono',
                 ),
                 const SizedBox(height: 20),
 
