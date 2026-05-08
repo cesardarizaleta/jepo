@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/emergency_contact.dart';
 import '../theme/app_theme.dart';
 import '../widgets/neumorphic_container.dart';
+import '../widgets/contact_priority_selector.dart';
 import '../services/api_client.dart';
 import '../services/auth_service.dart';
 import '../services/emergency_contacts_service.dart';
@@ -78,9 +79,7 @@ class _FamilyScreenState extends State<FamilyScreen> {
       if (mounted) {
         String msg = 'Error al cargar los contactos';
         if (e is ApiException) {
-          msg = e.errors.isNotEmpty
-              ? e.errors.join(', ')
-              : e.message;
+          msg = e.errors.isNotEmpty ? e.errors.join(', ') : e.message;
         } else {
           msg = e.toString();
         }
@@ -142,7 +141,8 @@ class _FamilyScreenState extends State<FamilyScreen> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) => _AddContactBottomSheet(
-        onAdd: (name, phone, priority) => _addContact(name, phone, priority.toString()),
+        onAdd: (name, phone, priority) =>
+            _addContact(name, phone, priority.toString()),
         existingContacts: _familyMembers,
       ),
     );
@@ -205,7 +205,9 @@ class _FamilyScreenState extends State<FamilyScreen> {
                                 _familyMembers.removeAt(index);
                               });
                               if (id != null) {
-                                EmergencyContactsService(appApi).deleteContact(id);
+                                EmergencyContactsService(
+                                  appApi,
+                                ).deleteContact(id);
                               }
                             },
                             background: Container(
@@ -215,7 +217,11 @@ class _FamilyScreenState extends State<FamilyScreen> {
                                 color: Colors.red.shade400,
                                 borderRadius: BorderRadius.circular(16),
                               ),
-                              child: const Icon(Icons.delete_outline, color: Colors.white, size: 28),
+                              child: const Icon(
+                                Icons.delete_outline,
+                                color: Colors.white,
+                                size: 28,
+                              ),
                             ),
                             child: NeumorphicContainer(
                               useAnimation: false,
@@ -225,7 +231,9 @@ class _FamilyScreenState extends State<FamilyScreen> {
                                     width: 50,
                                     height: 50,
                                     decoration: BoxDecoration(
-                                      color: AppTheme.primaryLight.withOpacity(0.3),
+                                      color: AppTheme.primaryLight.withOpacity(
+                                        0.3,
+                                      ),
                                       shape: BoxShape.circle,
                                     ),
                                     child: const Icon(
@@ -236,7 +244,8 @@ class _FamilyScreenState extends State<FamilyScreen> {
                                   const SizedBox(width: 20),
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         Text(
                                           member.name,
@@ -312,7 +321,7 @@ class _AddContactBottomSheetState extends State<_AddContactBottomSheet> {
         bottom: 32 + bottomPadding,
       ),
       decoration: const BoxDecoration(
-        color: AppTheme.background,
+        color: Color(0xFFEEEEEE),
         borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
       ),
       child: SingleChildScrollView(
@@ -345,7 +354,7 @@ class _AddContactBottomSheetState extends State<_AddContactBottomSheet> {
               style: TextStyle(color: AppTheme.textLight, fontSize: 14),
             ),
             const SizedBox(height: 32),
-            
+
             _buildLabel('Nombre completo'),
             NeumorphicTextField(
               controller: _nameController,
@@ -353,7 +362,7 @@ class _AddContactBottomSheetState extends State<_AddContactBottomSheet> {
               icon: Icons.person_outline,
             ),
             const SizedBox(height: 24),
-            
+
             _buildLabel('Número de teléfono'),
             NeumorphicTextField(
               controller: _phoneController,
@@ -362,12 +371,12 @@ class _AddContactBottomSheetState extends State<_AddContactBottomSheet> {
               keyboardType: TextInputType.phone,
             ),
             const SizedBox(height: 24),
-            
+
             _buildLabel('Prioridad de contacto'),
             const SizedBox(height: 8),
             _buildPrioritySelector(),
             const SizedBox(height: 40),
-            
+
             SizedBox(
               width: double.infinity,
               child: NeumorphicButton(
@@ -414,48 +423,9 @@ class _AddContactBottomSheetState extends State<_AddContactBottomSheet> {
   }
 
   Widget _buildPrioritySelector() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: List.generate(5, (index) {
-        final priority = index + 1;
-        final isSelected = _selectedPriority >= priority;
-        return GestureDetector(
-          onTap: () => setState(() => _selectedPriority = priority),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: AppTheme.background,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: isSelected
-                  ? [
-                      BoxShadow(
-                        color: AppTheme.primary.withOpacity(0.3),
-                        blurRadius: 8,
-                        offset: const Offset(0, 4),
-                      )
-                    ]
-                  : [
-                      BoxShadow(
-                        color: AppTheme.shadowDark.withOpacity(0.1),
-                        blurRadius: 4,
-                        offset: const Offset(2, 2),
-                      ),
-                      const BoxShadow(
-                        color: AppTheme.shadowLight,
-                        blurRadius: 4,
-                        offset: Offset(-2, -2),
-                      ),
-                    ],
-            ),
-            child: Icon(
-              priority <= 2 ? Icons.favorite_border : (priority <= 4 ? Icons.favorite : Icons.local_fire_department),
-              color: isSelected ? AppTheme.primary : AppTheme.textLight,
-              size: 28,
-            ),
-          ),
-        );
-      }),
+    return ContactPrioritySelector(
+      selectedPriority: _selectedPriority,
+      onChanged: (priority) => setState(() => _selectedPriority = priority),
     );
   }
 
@@ -484,9 +454,12 @@ class _AddContactBottomSheetState extends State<_AddContactBottomSheet> {
         return;
       }
 
-      final existing = widget.existingContacts.where((m) => m.id != null).toList();
+      final existing = widget.existingContacts
+          .where((m) => m.id != null)
+          .toList();
       if (existing.length >= 5) {
-        if (mounted) AppToast.warning(context, 'Máximo de 5 contactos permitidos');
+        if (mounted)
+          AppToast.warning(context, 'Máximo de 5 contactos permitidos');
         return;
       }
 

@@ -8,7 +8,7 @@ class BiometricService {
   static const _storage = FlutterSecureStorage(
     aOptions: AndroidOptions(encryptedSharedPreferences: true),
   );
-  
+
   static const String _keyBiometricEnabled = 'biometric_enabled';
   static const String _keyEmail = 'saved_email';
   static const String _keyPassword = 'saved_password';
@@ -33,9 +33,16 @@ class BiometricService {
     }
   }
 
-  static Future<void> setBiometricEnabled(bool enabled, {String? email, String? password}) async {
+  static Future<void> setBiometricEnabled(
+    bool enabled, {
+    String? email,
+    String? password,
+  }) async {
     try {
-      await _storage.write(key: _keyBiometricEnabled, value: enabled.toString());
+      await _storage.write(
+        key: _keyBiometricEnabled,
+        value: enabled.toString(),
+      );
       if (enabled && email != null && password != null) {
         await _storage.write(key: _keyEmail, value: email);
         await _storage.write(key: _keyPassword, value: password);
@@ -52,7 +59,7 @@ class BiometricService {
     try {
       final email = await _storage.read(key: _keyEmail);
       final password = await _storage.read(key: _keyPassword);
-      
+
       if (email != null && password != null) {
         return {'email': email, 'password': password};
       }

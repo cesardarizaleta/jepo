@@ -38,7 +38,10 @@ class AuthService {
       tokenFcm: tokenFcm,
     ).toJson();
 
-    final envelope = await api.postEnvelope('/api/auth/register', body: payload);
+    final envelope = await api.postEnvelope(
+      '/api/auth/register',
+      body: payload,
+    );
     return _persistSessionFromAuthResponse(envelope.raw);
   }
 
@@ -165,9 +168,7 @@ class AuthService {
   /// This attempts to patch the server-side user record if an `id` is available
   /// and the network call succeeds. On any failure the local stored user is
   /// still updated so UI reflects changes immediately.
-  Future<User> updateProfile(
-    UpdateUserDto updates,
-  ) async {
+  Future<User> updateProfile(UpdateUserDto updates) async {
     final current = await getCurrentUser();
     if (current == null) {
       throw const ApiException(statusCode: 401, message: 'No current user');
@@ -200,7 +201,8 @@ class AuthService {
           envelope.raw,
           dataParser: (value) {
             if (value is Map<String, dynamic>) return User.fromJson(value);
-            if (value is Map) return User.fromJson(value.cast<String, dynamic>());
+            if (value is Map)
+              return User.fromJson(value.cast<String, dynamic>());
             return null;
           },
         );

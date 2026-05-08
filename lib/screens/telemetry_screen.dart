@@ -42,7 +42,7 @@ class _TelemetryScreenState extends State<TelemetryScreen> {
   // Backend state
   bool _incidentActive = false;
   int _pendingAlerts = 0;
-  
+
   // Sensitivity Management
   double _sensitivityThreshold = 30.0;
   final String _thresholdKey = 'jepo_sensitivity_threshold';
@@ -61,7 +61,7 @@ class _TelemetryScreenState extends State<TelemetryScreen> {
         _pendingAlerts = await AlertQueueService(appApi).pendingCount();
       } catch (_) {}
     }
-    
+
     // Load saved threshold
     final prefs = await SharedPreferences.getInstance();
     _sensitivityThreshold = prefs.getDouble(_thresholdKey) ?? 30.0;
@@ -71,7 +71,10 @@ class _TelemetryScreenState extends State<TelemetryScreen> {
       _startListening();
     } else {
       if (mounted) {
-        AppToast.error(context, 'Se necesita permiso de ubicación para la telemetría');
+        AppToast.error(
+          context,
+          'Se necesita permiso de ubicación para la telemetría',
+        );
       }
     }
     if (mounted) setState(() {});
@@ -279,7 +282,10 @@ class _TelemetryScreenState extends State<TelemetryScreen> {
           const SizedBox(height: 20),
           Row(
             children: [
-              const Text("Más Sensible", style: TextStyle(fontSize: 12, color: AppTheme.textLight)),
+              const Text(
+                "Más Sensible",
+                style: TextStyle(fontSize: 12, color: AppTheme.textLight),
+              ),
               Expanded(
                 child: Slider(
                   value: _sensitivityThreshold,
@@ -289,11 +295,15 @@ class _TelemetryScreenState extends State<TelemetryScreen> {
                   activeColor: AppTheme.primary,
                   inactiveColor: AppTheme.primaryLight.withOpacity(0.3),
                   label: _sensitivityThreshold.toStringAsFixed(1),
-                  onChanged: (val) => setState(() => _sensitivityThreshold = val),
+                  onChanged: (val) =>
+                      setState(() => _sensitivityThreshold = val),
                   onChangeEnd: _updateThreshold,
                 ),
               ),
-              const Text("Menos Sensible", style: TextStyle(fontSize: 12, color: AppTheme.textLight)),
+              const Text(
+                "Menos Sensible",
+                style: TextStyle(fontSize: 12, color: AppTheme.textLight),
+              ),
             ],
           ),
           Center(
@@ -313,7 +323,7 @@ class _TelemetryScreenState extends State<TelemetryScreen> {
   Future<void> _updateThreshold(double val) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setDouble(_thresholdKey, val);
-    
+
     // Notify Background Service
     if (!kIsWeb) {
       try {
@@ -323,7 +333,7 @@ class _TelemetryScreenState extends State<TelemetryScreen> {
         debugPrint('Error notifying background service: $e');
       }
     }
-    
+
     if (mounted) {
       AppToast.success(context, 'Sensibilidad actualizada');
     }
@@ -343,10 +353,7 @@ class _TelemetryScreenState extends State<TelemetryScreen> {
         const SizedBox(height: 2),
         Text(
           label,
-          style: const TextStyle(
-            fontSize: 11,
-            color: AppTheme.textLight,
-          ),
+          style: const TextStyle(fontSize: 11, color: AppTheme.textLight),
         ),
       ],
     );

@@ -148,7 +148,9 @@ class _SessionGateState extends State<SessionGate> with WidgetsBindingObserver {
     // This is the PRIMARY path for showing the pre-alert on Android 10+.
     // -----------------------------------------------------------------------
     _foregroundChannel.setMethodCallHandler((call) async {
-      debugPrint('MainApp: Native MethodChannel call: ${call.method} args=${call.arguments}');
+      debugPrint(
+        'MainApp: Native MethodChannel call: ${call.method} args=${call.arguments}',
+      );
       if (call.method == 'showPreAlert') {
         final seconds = (call.arguments as Map?)?['seconds'] as int? ?? 5;
         debugPrint('MainApp: Native triggered showPreAlert ($seconds s)');
@@ -196,7 +198,9 @@ class _SessionGateState extends State<SessionGate> with WidgetsBindingObserver {
         return;
       }
       if (_preAlertRouteActive) {
-        debugPrint('MainApp: Pre-alert route already active, resolving as unsafe');
+        debugPrint(
+          'MainApp: Pre-alert route already active, resolving as unsafe',
+        );
         request.resolveAsSafe(false);
         return;
       }
@@ -225,12 +229,18 @@ class _SessionGateState extends State<SessionGate> with WidgetsBindingObserver {
     // ever see it. When the user opens the app via the notification,
     // didChangeAppLifecycleState(resumed) fires _recoverPendingPreAlert().
     if (_supportsBackgroundService) {
-      _serviceSub = _backgroundService?.on('show_pre_alert').listen((event) async {
-        debugPrint('MainApp: show_pre_alert IPC received. appInForeground=$_appInForeground');
+      _serviceSub = _backgroundService?.on('show_pre_alert').listen((
+        event,
+      ) async {
+        debugPrint(
+          'MainApp: show_pre_alert IPC received. appInForeground=$_appInForeground',
+        );
         final seconds = (event?['seconds'] as num?)?.toInt() ?? 5;
 
         if (!_appInForeground) {
-          debugPrint('MainApp: App is in background — attempting to bring to foreground natively.');
+          debugPrint(
+            'MainApp: App is in background — attempting to bring to foreground natively.',
+          );
           try {
             await _foregroundChannel.invokeMethod('bringToForeground');
           } catch (e) {
@@ -243,7 +253,9 @@ class _SessionGateState extends State<SessionGate> with WidgetsBindingObserver {
           debugPrint('MainApp: UI not ready for IPC show_pre_alert');
           return;
         }
-        debugPrint('MainApp: App in foreground — showing pre-alert screen ($seconds s)');
+        debugPrint(
+          'MainApp: App in foreground — showing pre-alert screen ($seconds s)',
+        );
         await _presentPreAlert(seconds: seconds, notifyBackgroundService: true);
       });
     }
@@ -271,7 +283,10 @@ class _SessionGateState extends State<SessionGate> with WidgetsBindingObserver {
           // Defer until after initState completes
           WidgetsBinding.instance.addPostFrameCallback((_) async {
             await _awaitUiReady(const Duration(seconds: 3));
-            await _presentPreAlert(seconds: seconds, notifyBackgroundService: true);
+            await _presentPreAlert(
+              seconds: seconds,
+              notifyBackgroundService: true,
+            );
           });
         }
       }
@@ -288,7 +303,10 @@ class _SessionGateState extends State<SessionGate> with WidgetsBindingObserver {
         if (payload.startsWith('pre_alert:')) {
           final secondsStr = payload.split(':').last;
           final seconds = int.tryParse(secondsStr) ?? 5;
-          await _presentPreAlert(seconds: seconds, notifyBackgroundService: true);
+          await _presentPreAlert(
+            seconds: seconds,
+            notifyBackgroundService: true,
+          );
         }
       },
     );
@@ -303,7 +321,7 @@ class _SessionGateState extends State<SessionGate> with WidgetsBindingObserver {
       // Check if there's a pending pre-alert stored and show it.
       _recoverPendingPreAlert();
     } else if (state == AppLifecycleState.paused ||
-               state == AppLifecycleState.inactive) {
+        state == AppLifecycleState.inactive) {
       _appInForeground = false;
     }
   }
@@ -330,7 +348,9 @@ class _SessionGateState extends State<SessionGate> with WidgetsBindingObserver {
   Future<void> _recoverPendingPreAlert() async {
     debugPrint('MainApp: Checking for pending pre-alert recovery...');
     if (!mounted || _preAlertRouteActive) {
-      debugPrint('MainApp: Recovery skipped (mounted=$mounted, routeActive=$_preAlertRouteActive)');
+      debugPrint(
+        'MainApp: Recovery skipped (mounted=$mounted, routeActive=$_preAlertRouteActive)',
+      );
       return;
     }
 
@@ -343,8 +363,13 @@ class _SessionGateState extends State<SessionGate> with WidgetsBindingObserver {
     // Use at least 10 seconds so the user has a clear window to respond,
     // even if some time elapsed while the app was opening.
     final displaySeconds = seconds < 10 ? 10 : seconds;
-    debugPrint('MainApp: Recovering pending pre-alert (display=${displaySeconds}s, original=${seconds}s)');
-    await _presentPreAlert(seconds: displaySeconds, notifyBackgroundService: true);
+    debugPrint(
+      'MainApp: Recovering pending pre-alert (display=${displaySeconds}s, original=${seconds}s)',
+    );
+    await _presentPreAlert(
+      seconds: displaySeconds,
+      notifyBackgroundService: true,
+    );
   }
 
   Future<void> _presentPreAlert({
@@ -352,7 +377,9 @@ class _SessionGateState extends State<SessionGate> with WidgetsBindingObserver {
     required bool notifyBackgroundService,
   }) async {
     if (!mounted || _preAlertRouteActive) {
-      debugPrint('MainApp: _presentPreAlert skipped (mounted=$mounted, routeActive=$_preAlertRouteActive)');
+      debugPrint(
+        'MainApp: _presentPreAlert skipped (mounted=$mounted, routeActive=$_preAlertRouteActive)',
+      );
       return;
     }
 
