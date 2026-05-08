@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:sensors_plus/sensors_plus.dart';
@@ -314,11 +315,13 @@ class _TelemetryScreenState extends State<TelemetryScreen> {
     await prefs.setDouble(_thresholdKey, val);
     
     // Notify Background Service
-    try {
-      final service = FlutterBackgroundService();
-      service.invoke('setThreshold', {"threshold": val});
-    } catch (e) {
-      debugPrint('Error notifying background service: $e');
+    if (!kIsWeb) {
+      try {
+        final service = FlutterBackgroundService();
+        service.invoke('setThreshold', {"threshold": val});
+      } catch (e) {
+        debugPrint('Error notifying background service: $e');
+      }
     }
     
     if (mounted) {

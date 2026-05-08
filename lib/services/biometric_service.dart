@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter/services.dart';
@@ -13,6 +14,9 @@ class BiometricService {
   static const String _keyPassword = 'saved_password';
 
   static Future<bool> canCheckBiometrics() async {
+    if (kIsWeb) {
+      return false;
+    }
     try {
       return await _auth.canCheckBiometrics || await _auth.isDeviceSupported();
     } on PlatformException {
@@ -59,6 +63,9 @@ class BiometricService {
   }
 
   static Future<bool> authenticate() async {
+    if (kIsWeb) {
+      return false;
+    }
     try {
       return await _auth.authenticate(
         localizedReason: 'Inicia sesión de forma rápida y segura',

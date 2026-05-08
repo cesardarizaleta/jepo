@@ -121,7 +121,7 @@ class _SessionGateState extends State<SessionGate> with WidgetsBindingObserver {
   StreamSubscription? _logoutSub;
   StreamSubscription<PreAlertRequest>? _preAlertSub;
   StreamSubscription? _serviceSub;
-  late final FlutterBackgroundService _backgroundService;
+  FlutterBackgroundService? _backgroundService;
   static const _foregroundChannel = MethodChannel(
     'com.example.jepo/foreground',
   );
@@ -135,8 +135,11 @@ class _SessionGateState extends State<SessionGate> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _backgroundService = FlutterBackgroundService();
     _hasSession = _determineSession();
+
+    if (_supportsBackgroundService) {
+      _backgroundService = FlutterBackgroundService();
+    }
 
     // -----------------------------------------------------------------------
     // CRITICAL: Register MethodChannel handler for native -> Flutter calls.
@@ -221,27 +224,29 @@ class _SessionGateState extends State<SessionGate> with WidgetsBindingObserver {
     // runs an invisible 5s countdown that fires the alert before the user can
     // ever see it. When the user opens the app via the notification,
     // didChangeAppLifecycleState(resumed) fires _recoverPendingPreAlert().
-    _serviceSub = _backgroundService.on('show_pre_alert').listen((event) async {
-      debugPrint('MainApp: show_pre_alert IPC received. appInForeground=$_appInForeground');
-      final seconds = (event?['seconds'] as num?)?.toInt() ?? 5;
+    if (_supportsBackgroundService) {
+      _serviceSub = _backgroundService?.on('show_pre_alert').listen((event) async {
+        debugPrint('MainApp: show_pre_alert IPC received. appInForeground=$_appInForeground');
+        final seconds = (event?['seconds'] as num?)?.toInt() ?? 5;
 
-      if (!_appInForeground) {
-        debugPrint('MainApp: App is in background — attempting to bring to foreground natively.');
-        try {
-          await _foregroundChannel.invokeMethod('bringToForeground');
-        } catch (e) {
-          debugPrint('MainApp: Failed to bring to foreground: $e');
+        if (!_appInForeground) {
+          debugPrint('MainApp: App is in background — attempting to bring to foreground natively.');
+          try {
+            await _foregroundChannel.invokeMethod('bringToForeground');
+          } catch (e) {
+            debugPrint('MainApp: Failed to bring to foreground: $e');
+          }
+          return;
         }
-        return;
-      }
 
-      if (!await _awaitUiReady(const Duration(seconds: 2))) {
-        debugPrint('MainApp: UI not ready for IPC show_pre_alert');
-        return;
-      }
-      debugPrint('MainApp: App in foreground — showing pre-alert screen ($seconds s)');
-      await _presentPreAlert(seconds: seconds, notifyBackgroundService: true);
-    });
+        if (!await _awaitUiReady(const Duration(seconds: 2))) {
+          debugPrint('MainApp: UI not ready for IPC show_pre_alert');
+          return;
+        }
+        debugPrint('MainApp: App in foreground — showing pre-alert screen ($seconds s)');
+        await _presentPreAlert(seconds: seconds, notifyBackgroundService: true);
+      });
+    }
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       debugPrint('MainApp: Post-frame callback — UI ready');
@@ -383,19 +388,24 @@ class _SessionGateState extends State<SessionGate> with WidgetsBindingObserver {
       debugPrint('MainApp: Pre-alert decision received: isSafe=$isSafe');
 
       if (notifyBackgroundService) {
-        _backgroundService.invoke('pre_alert_response', {"isSafe": isSafe});
+        _backgroundService?.invoke('pre_alert_response', {"isSafe": isSafe});
         debugPrint('MainApp: Sent pre_alert_response to background service');
       }
     } catch (e) {
       debugPrint('MainApp: Error in _presentPreAlert: $e');
       // On any error, notify background to proceed with the alert (safe=false)
       if (notifyBackgroundService) {
-        _backgroundService.invoke('pre_alert_response', {"isSafe": false});
+        _backgroundService?.invoke('pre_alert_response', {"isSafe": false});
       }
     } finally {
       _preAlertRouteActive = false;
     }
   }
+
+  bool get _supportsBackgroundService =>
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.iOS);
 
   @override
   void dispose() {

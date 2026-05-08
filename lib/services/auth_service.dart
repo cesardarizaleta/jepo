@@ -106,10 +106,12 @@ class AuthService {
     await prefs.remove(_currentUserKey);
 
     // Best-effort: stop background service to halt sensor/location streams.
-    try {
-      final bgService = FlutterBackgroundService();
-      bgService.invoke('stopService');
-    } catch (_) {}
+    if (!kIsWeb) {
+      try {
+        final bgService = FlutterBackgroundService();
+        bgService.invoke('stopService');
+      } catch (_) {}
+    }
   }
 
   Future<ApiResponse<AuthSession>> _persistSessionFromAuthResponse(
