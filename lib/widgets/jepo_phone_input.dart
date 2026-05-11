@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 
 class JepoPhoneInput extends StatefulWidget {
@@ -37,15 +38,21 @@ class _JepoPhoneInputState extends State<JepoPhoneInput> {
 
   final TextEditingController _localNumberController = TextEditingController();
   String _selectedPrefix = _prefixes.first;
+  bool? _lastNotifiedValidity;
 
   bool get _isValid => _localNumberController.text.length == 7;
 
   @override
   void initState() {
     super.initState();
+    // Hidrata ANTES de registrar los listeners para evitar disparar
+    // callbacks durante initState.
     _hydrateFromFullPhone(widget.controller.text);
     _localNumberController.addListener(_syncFullController);
     widget.controller.addListener(_syncFromExternalController);
+    // Notifica validez en el siguiente frame: llamarlo ahora provocaria
+    // setState() en el padre durante build.
+    _scheduleValidityNotification();
   }
 
   @override
@@ -53,8 +60,13 @@ class _JepoPhoneInputState extends State<JepoPhoneInput> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.controller != widget.controller) {
       oldWidget.controller.removeListener(_syncFromExternalController);
-      widget.controller.addListener(_syncFromExternalController);
+      // Quitamos el listener local mientras rehidratamos para que no se
+      // dispare setState en medio de didUpdateWidget.
+      _localNumberController.removeListener(_syncFullController);
       _hydrateFromFullPhone(widget.controller.text);
+      _localNumberController.addListener(_syncFullController);
+      widget.controller.addListener(_syncFromExternalController);
+      _scheduleValidityNotification();
     }
   }
 
@@ -72,7 +84,14 @@ class _JepoPhoneInputState extends State<JepoPhoneInput> {
       _localNumberController.text,
     );
     if (_digitsOnly(widget.controller.text) != current) {
+      // Evitamos que nuestro propio set dispare un bucle.
+      _localNumberController.removeListener(_syncFullController);
       _hydrateFromFullPhone(widget.controller.text);
+      _localNumberController.addListener(_syncFullController);
+      _scheduleValidityNotification();
+      if (mounted) {
+        setState(() {});
+      }
     }
   }
 
@@ -84,16 +103,13 @@ class _JepoPhoneInputState extends State<JepoPhoneInput> {
         : '';
 
     _selectedPrefix = resolvedPrefix;
+    final trimmed = remainder.length > 7
+        ? remainder.substring(0, 7)
+        : remainder;
     _localNumberController.value = TextEditingValue(
-      text: remainder.length > 7 ? remainder.substring(0, 7) : remainder,
-      selection: TextSelection.collapsed(
-        offset: remainder.length > 7 ? 7 : remainder.length,
-      ),
+      text: trimmed,
+      selection: TextSelection.collapsed(offset: trimmed.length),
     );
-    widget.onValidityChanged?.call(_isValid);
-    if (mounted) {
-      setState(() {});
-    }
   }
 
   void _syncFullController() {
@@ -104,10 +120,22 @@ class _JepoPhoneInputState extends State<JepoPhoneInput> {
         selection: TextSelection.collapsed(offset: full.length),
       );
     }
-    widget.onValidityChanged?.call(_isValid);
+    _scheduleValidityNotification();
     if (mounted) {
       setState(() {});
     }
+  }
+
+  void _scheduleValidityNotification() {
+    final callback = widget.onValidityChanged;
+    if (callback == null) return;
+    final isValid = _isValid;
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (_lastNotifiedValidity == isValid) return;
+      _lastNotifiedValidity = isValid;
+      callback(isValid);
+    });
   }
 
   static String _digitsOnly(String input) =>
