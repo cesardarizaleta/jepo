@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>JEPO — Términos y Condiciones</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #EEEEEE;
+      --surface: #FFFFFF;
+      --accent: #7FCCC4;
+      --accent-light: rgba(127, 204, 196, 0.1);
+      --danger: #FF5151;
+      --text-dark: #2D3436;
+      --text-mid: #636E72;
+      --text-light: #B2BEC3;
+      --shadow-dark: rgba(163, 177, 198, 0.4);
+      --shadow-light: rgba(255, 255, 255, 0.9);
+      --radius: 20px;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg);
+      color: var(--text-dark);
+      line-height: 1.7;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Hero */
+    .hero {
+      text-align: center;
+      padding: 80px 20px 60px;
+      background: linear-gradient(135deg, var(--bg) 0%, #E0E5EC 100%);
+    }
+
+    .hero-logo {
+      width: 80px;
+      height: 80px;
+      background: var(--bg);
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow:
+        8px 8px 16px var(--shadow-dark),
+        -8px -8px 16px var(--shadow-light);
+      margin-bottom: 24px;
+      font-size: 32px;
+      font-weight: 900;
+      color: var(--accent);
+    }
+
+    .hero h1 {
+      font-size: clamp(28px, 5vw, 42px);
+      font-weight: 900;
+      color: var(--text-dark);
+      margin-bottom: 12px;
+    }
+
+    .hero p {
+      font-size: 16px;
+      color: var(--text-mid);
+      max-width: 500px;
+      margin: 0 auto;
+    }
+
+    .badge {
+      display: inline-block;
+      margin-top: 16px;
+      padding: 6px 14px;
+      background: var(--accent-light);
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--accent);
+    }
+
+    /* Container */
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 0 20px 80px;
+    }
+
+    /* Nav tabs */
+    .tabs {
+      display: flex;
+      gap: 12px;
+      margin: -30px auto 40px;
+      max-width: 800px;
+      padding: 0 20px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .tab {
+      padding: 12px 24px;
+      background: var(--bg);
+      border: none;
+      border-radius: 14px;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-mid);
+      cursor: pointer;
+      box-shadow:
+        4px 4px 8px var(--shadow-dark),
+        -4px -4px 8px var(--shadow-light);
+      transition: all 0.2s ease;
+    }
+
+    .tab:hover {
+      color: var(--accent);
+    }
+
+    .tab.active {
+      color: var(--accent);
+      box-shadow:
+        inset 2px 2px 5px var(--shadow-dark),
+        inset -2px -2px 5px var(--shadow-light);
+    }
+
+    /* Sections */
+    .section-card {
+      background: var(--bg);
+      border-radius: var(--radius);
+      padding: 28px;
+      margin-bottom: 20px;
+      box-shadow:
+        6px 6px 12px var(--shadow-dark),
+        -6px -6px 12px var(--shadow-light);
+    }
+
+    .section-card .section-header {
+      display: flex;
+      align-items: flex-start;
+      gap: 14px;
+      margin-bottom: 16px;
+    }
+
+    .section-number {
+      min-width: 32px;
+      height: 32px;
+      background: var(--accent-light);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--accent);
+    }
+
+    .section-card h2 {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text-dark);
+      margin-top: 4px;
+    }
+
+    .section-card p,
+    .section-card ul {
+      font-size: 14px;
+      color: var(--text-mid);
+      line-height: 1.8;
+    }
+
+    .section-card ul {
+      padding-left: 20px;
+    }
+
+    .section-card ul li {
+      margin-bottom: 6px;
+    }
+
+    .section-card .highlight {
+      background: rgba(255, 81, 81, 0.06);
+      border-left: 3px solid var(--danger);
+      padding: 12px 16px;
+      border-radius: 0 10px 10px 0;
+      margin: 12px 0;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-dark);
+    }
+
+    .section-card .info-box {
+      background: var(--accent-light);
+      border-left: 3px solid var(--accent);
+      padding: 12px 16px;
+      border-radius: 0 10px 10px 0;
+      margin: 12px 0;
+      font-size: 13px;
+      color: var(--text-mid);
+    }
+
+    /* Footer */
+    .footer {
+      text-align: center;
+      padding: 40px 20px;
+      border-top: 1px solid rgba(163, 177, 198, 0.2);
+    }
+
+    .footer p {
+      font-size: 12px;
+      color: var(--text-light);
+    }
+
+    /* Content sections */
+    .content-section {
+      display: none;
+    }
+
+    .content-section.active {
+      display: block;
+    }
+
+    /* Responsive */
+    @media (max-width: 600px) {
+      .section-card {
+        padding: 20px;
+      }
+      .tabs {
+        gap: 8px;
+      }
+      .tab {
+        padding: 10px 16px;
+        font-size: 12px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <section class="hero">
+    <div class="hero-logo">J</div>
+    <h1>Términos Legales</h1>
+    <p>Documentación legal completa del Sistema de Asistencia Proactiva JEPO</p>
+    <span class="badge">Última actualización: 11 de mayo de 2026</span>
+  </section>
+
+  <div class="tabs">
+    <button class="tab active" onclick="showSection('terms')">Términos y Condiciones</button>
+    <button class="tab" onclick="showSection('privacy')">Política de Privacidad</button>
+    <button class="tab" onclick="showSection('disclaimer')">Descargo de Responsabilidad</button>
+  </div>
+
+  <div class="container">
+
+    <!-- TERMS -->
+    <div id="terms" class="content-section active">
+      <div class="section-card">
+        <div class="section-header">
+          <div class="section-number">1</div>
+          <h2>Aceptación de los Términos</h2>
+        </div>
+        <p>Al descargar, instalar o utilizar la aplicación JEPO ("la Aplicación"), usted acepta quedar vinculado por estos Términos y Condiciones de Uso. Si no está de acuerdo con alguno de estos Términos, no utilice la Aplicación.</p>
+        <p style="margin-top:10px">El uso continuado de la Aplicación después de cualquier modificación de estos Términos constituye su aceptación de dichas modificaciones.</p>
+      </div>
+
+      <div class="section-card">
+        <div class="section-header">
+          <div class="section-number">2</div>
+          <h2>Descripción del Servicio</h2>
+        </div>
+        <p>JEPO es un sistema de asistencia proactiva diseñado para detectar situaciones de riesgo potencial mediante sensores del dispositivo móvil (acelerómetro, giroscopio, GPS) y notificar a contactos de emergencia previamente designados por el usuario.</p>
+        <div class="highlight">
+          LA APLICACIÓN NO SUSTITUYE A LOS SERVICIOS DE EMERGENCIA OFICIALES (911, bomberos, policía, ambulancias). Es una herramienta complementaria de notificación.
+        </div>
+      </div>
+
+      <div class="section-card">
+        <div class="section-header">
+          <div class="section-number">3</div>
+          <h2>Requisitos de Uso</h2>
+        </div>
+        <ul>
+          <li>Debe ser mayor de 18 años o contar con autorización de un representante legal.</li>
+          <li>Debe proporcionar información veraz y actualizada al registrarse.</li>
+          <li>Es responsable de mantener la confidencialidad de sus credenciales de acceso.</li>
+          <li>Debe contar con un dispositivo compatible con conexión a internet activa.</li>
+          <li>Debe otorgar los permisos necesarios (ubicación, notificaciones, sensores) para el funcionamiento correcto del sistema.</li>
+        </ul>
+      </div>
+
+      <div class="section-card">
+        <div class="section-header">
+          <div class="section-number">4</div>
+          <h2>Limitación de Responsabilidad</h2>
+        </div>
+        <p><strong>JEPO App NO GARANTIZA:</strong></p>
+        <ul>
+          <li>La disponibilidad ininterrumpida del servicio.</li>
+          <li>La precisión absoluta en la detección de incidentes.</li>
+          <li>La entrega exitosa de notificaciones a contactos de emergencia.</li>
+          <li>Que la Aplicación prevenga, mitigue o resuelva situaciones de peligro real.</li>
+        </ul>
+        <div class="highlight">
+          EN NINGÚN CASO JEPO App, SUS DESARROLLADORES, DIRECTORES, EMPLEADOS O AFILIADOS SERÁN RESPONSABLES POR daños directos, indirectos, incidentales, especiales, consecuentes o punitivos; lesiones personales, muerte o daños a la propiedad; pérdida de datos, lucro cesante o interrupción de negocio; fallos en la detección de incidentes o falsas alarmas.
+        </div>
+        <p style="margin-top:10px"><strong>El usuario reconoce y acepta que utiliza la Aplicación BAJO SU PROPIO RIESGO.</strong></p>
+      </div>
+
+      <div class="section-card">
+        <div class="section-header">
+          <div class="section-number">5</div>
+          <h2>Exoneración de Responsabilidad</h2>
+        </div>
+        <p>El usuario libera y exonera expresamente a JEPO App de toda responsabilidad civil, penal o administrativa derivada de:</p>
+        <ul>
+          <li>El uso o la imposibilidad de uso de la Aplicación.</li>
+          <li>Fallos técnicos, interrupciones del servicio o errores del sistema.</li>
+          <li>Decisiones tomadas con base en la información proporcionada por la Aplicación.</li>
+          <li>La no activación o activación tardía de alertas.</li>
+          <li>Interferencias de terceros en el funcionamiento del servicio.</li>
+          <li>Eventos de fuerza mayor o caso fortuito.</li>
+        </ul>
+      </div>
+
+      <div class="section-card">
+        <div class="section-header">
+          <div class="section-number">6</div>
+          <h2>Uso Aceptable</h2>
+        </div>
+        <p>El usuario se compromete a NO utilizar la Aplicación para:</p>
+        <ul>
+          <li>Generar alertas falsas o fraudulentas.</li>
+          <li>Acosar, intimidar o perjudicar a terceros.</li>
+          <li>Realizar ingeniería inversa, descompilar o modificar la Aplicación.</li>
+          <li>Interferir con el funcionamiento del servicio o sus servidores.</li>
+          <li>Suplantar la identidad de otra persona.</li>
+          <li>Cualquier actividad ilegal o contraria a la moral y las buenas costumbres.</li>
+        </ul>
+        <div class="info-box">
+          El incumplimiento de estas normas resultará en la suspensión o eliminación inmediata de la cuenta sin previo aviso.
+        </div>
+      </div>
+
+      <div class="section-card">
+        <div class="section-header">
+          <div class="section-number">7</div>
+          <h2>Propiedad Intelectual</h2>
+        </div>
+        <p>Todos los derechos de propiedad intelectual sobre la Aplicación, incluyendo pero no limitado a: código fuente, diseño, logotipos, marcas, algoritmos y documentación, son propiedad exclusiva de JEPO App.</p>
+        <p style="margin-top:10px">Se otorga al usuario una licencia limitada, no exclusiva, intransferible y revocable para usar la Aplicación conforme a estos Términos.</p>
+      </div>
+
+      <div class="section-card">
+        <div class="section-header">
+          <div class="section-number">8</div>
+          <h2>Indemnización</h2>
+        </div>
+        <p>El usuario acepta indemnizar, defender y mantener indemne a JEPO App, sus desarrolladores, directores, empleados y afiliados, de cualquier reclamación, demanda, daño, pérdida, responsabilidad, costo o gasto (incluyendo honorarios de abogados) que surja de:</p>
+        <ul>
+          <li>Su uso de la Aplicación.</li>
+          <li>Su violación de estos Términos.</li>
+          <li>Su violación de derechos de terceros.</li>
+          <li>Información inexacta proporcionada por el usuario.</li>
+        </ul>
+      </div>
+
+      <div class="section-card">
+        <div class="section-header">
+          <div class="section-number">9</div>
+          <h2>Naturaleza Experimental</h2>
+        </div>
+        <p>El usuario reconoce que JEPO es un proyecto de desarrollo académico/tecnológico y que los algoritmos de detección de incidentes están en constante evolución.</p>
+        <div class="highlight">
+          NO SE OFRECE GARANTÍA ALGUNA, EXPRESA O IMPLÍCITA, INCLUYENDO PERO NO LIMITADO A GARANTÍAS DE COMERCIABILIDAD, IDONEIDAD PARA UN PROPÓSITO PARTICULAR O NO INFRACCIÓN.
+        </div>
+      </div>
+
+      <div class="section-card">
+        <div class="section-header">
+          <div class="section-number">10</div>
+          <h2>Ley Aplicable y Jurisdicción</h2>
+        </div>
+        <p>Estos Términos se rigen por las leyes de la República Bolivariana de Venezuela. Cualquier controversia será sometida a la jurisdicción exclusiva de los tribunales competentes de Venezuela.</p>
+        <p style="margin-top:10px">Si alguna disposición se considera inválida o inaplicable, las disposiciones restantes continuarán en pleno vigor y efecto.</p>
+      </div>
+    </div>
+
+    <!-- PRIVACY -->
+    <div id="privacy" class="content-section">
+      <div class="section-card">
+        <div class="section-header">
+          <div class="section-number">1</div>
+          <h2>Datos que Recopilamos</h2>
+        </div>
+        <ul>
+          <li><strong>Información personal:</strong> nombre, cédula, correo electrónico, teléfono.</li>
+          <li><strong>Datos de ubicación:</strong> coordenadas GPS cuando la aplicación está activa.</li>
+          <li><strong>Datos de sensores:</strong> lecturas del acelerómetro y giroscopio.</li>
+          <li><strong>Contactos de emergencia:</strong> nombres y teléfonos que usted registra.</li>
+        </ul>
+      </div>
+
+      <div class="section-card">
+        <div class="section-header">
+          <div class="section-number">2</div>
+          <h2>Cómo Usamos sus Datos</h2>
+        </div>
+        <ul>
+          <li>Detección proactiva de situaciones de riesgo mediante análisis de sensores.</li>
+          <li>Envío de alertas a sus contactos de emergencia designados.</li>
+          <li>Mejora continua de los algoritmos de detección.</li>
+          <li>Autenticación y seguridad de su cuenta.</li>
+        </ul>
+        <div class="info-box">
+          NO vendemos, alquilamos ni compartimos sus datos personales con terceros para fines comerciales o publicitarios.
+        </div>
+      </div>
+
+      <div class="section-card">
+        <div class="section-header">
+          <div class="section-number">3</div>
+          <h2>Almacenamiento y Seguridad</h2>
+        </div>
+        <ul>
+          <li>Datos almacenados en servidores seguros con cifrado en tránsito y en reposo.</li>
+          <li>Contraseñas almacenadas con hash criptográfico (nunca en texto plano).</li>
+          <li>Tokens de sesión con expiración automática.</li>
+          <li>Medidas de seguridad estándar de la industria.</li>
+        </ul>
+      </div>
+
+      <div class="section-card">
+        <div class="section-header">
+          <div class="section-number">4</div>
+          <h2>Compartición de Datos</h2>
+        </div>
+        <ul>
+          <li>NO vendemos sus datos a terceros.</li>
+          <li>NO compartimos información con fines publicitarios.</li>
+          <li>Datos de ubicación SOLO se comparten con contactos de emergencia al activarse una alerta.</li>
+          <li>Podemos compartir datos si es requerido por ley o autoridad competente.</li>
+        </ul>
+      </div>
+
+      <div class="section-card">
+        <div class="section-header">
+          <div class="section-number">5</div>
+          <h2>Sus Derechos</h2>
+        </div>
+        <ul>
+          <li>Acceder a sus datos personales almacenados.</li>
+          <li>Rectificar información incorrecta.</li>
+          <li>Solicitar la eliminación de su cuenta y datos asociados.</li>
+          <li>Revocar permisos en cualquier momento (limitará funcionalidad).</li>
+        </ul>
+      </div>
+
+      <div class="section-card">
+        <div class="section-header">
+          <div class="section-number">6</div>
+          <h2>Retención de Datos</h2>
+        </div>
+        <ul>
+          <li>Datos de alertas: conservados por 90 días.</li>
+          <li>Datos de cuenta: conservados mientras la cuenta esté activa.</li>
+          <li>Al eliminar cuenta: todos los datos se eliminan en 30 días.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- DISCLAIMER -->
+    <div id="disclaimer" class="content-section">
+      <div class="section-card">
+        <div class="section-header">
+          <div class="section-number">!</div>
+          <h2>Descargo General de Responsabilidad</h2>
+        </div>
+        <div class="highlight">
+          JEPO es una herramienta tecnológica de asistencia complementaria. NO es un servicio de emergencia, NO reemplaza al 911, y NO garantiza la seguridad física del usuario bajo ninguna circunstancia.
+        </div>
+        <p style="margin-top:16px">El sistema se basa en algoritmos de detección que analizan patrones de movimiento y ubicación. Estos algoritmos:</p>
+        <ul style="margin-top:10px">
+          <li>Pueden generar <strong>falsos positivos</strong> (alertas sin incidente real).</li>
+          <li>Pueden generar <strong>falsos negativos</strong> (no detectar un incidente real).</li>
+          <li>Dependen de la calidad de los sensores del dispositivo.</li>
+          <li>Dependen de la conectividad a internet para enviar notificaciones.</li>
+          <li>No funcionan si el dispositivo está apagado, sin batería o sin señal.</li>
+        </ul>
+      </div>
+
+      <div class="section-card">
+        <div class="section-header">
+          <div class="section-number">!</div>
+          <h2>Factores Externos</h2>
+        </div>
+        <p>JEPO App no tiene control sobre:</p>
+        <ul>
+          <li>La disponibilidad de redes de telecomunicaciones.</li>
+          <li>La respuesta o disponibilidad de los contactos de emergencia.</li>
+          <li>El funcionamiento de servicios de terceros (WhatsApp, operadoras, etc.).</li>
+          <li>Condiciones ambientales que afecten los sensores del dispositivo.</li>
+          <li>Actualizaciones del sistema operativo que modifiquen permisos.</li>
+        </ul>
+      </div>
+
+      <div class="section-card">
+        <div class="section-header">
+          <div class="section-number">!</div>
+          <h2>Recomendaciones de Seguridad</h2>
+        </div>
+        <div class="info-box">
+          Ante cualquier situación de emergencia real, SIEMPRE contacte primero a los servicios de emergencia oficiales (911). JEPO es un complemento, nunca un sustituto.
+        </div>
+        <ul style="margin-top:12px">
+          <li>Mantenga siempre actualizada la información de sus contactos de emergencia.</li>
+          <li>Verifique periódicamente que los permisos de la aplicación estén activos.</li>
+          <li>Informe a sus contactos de emergencia que están registrados en JEPO.</li>
+          <li>No dependa exclusivamente de esta aplicación para su seguridad personal.</li>
+        </ul>
+      </div>
+    </div>
+
+  </div>
+
+  <footer class="footer">
+    <p>© 2026 JEPO App — Sistema de Asistencia Proactiva a Personas</p>
+    <p style="margin-top:6px">Todos los derechos reservados. República Bolivariana de Venezuela.</p>
+  </footer>
+
+  <script>
+    function showSection(id) {
+      document.querySelectorAll('.content-section').forEach(s => s.classList.remove('active'));
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.getElementById(id).classList.add('active');
+      event.target.classList.add('active');
+    }
+  </script>
+</body>
+</html>

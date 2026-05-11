@@ -15,7 +15,7 @@
     "editor.tabCompletion": "onlySnippets",
     "editor.wordBasedSuggestions": "off"
   },
-  "dart.flutterSdkPath": "fvm/default", 
+  "dart.flutterSdkPath": "fvm/default",
   "files.exclude": {
     "**/.git": true,
     "**/.svn": true,
