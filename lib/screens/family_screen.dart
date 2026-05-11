@@ -37,7 +37,6 @@ class _FamilyScreenState extends State<FamilyScreen> {
   List<_FamilyMember> _familyMembers = <_FamilyMember>[];
   bool _isLoading = true;
   bool _hasSession = false;
-  bool _fabExpanded = false;
   int? _selectedContactIndex;
 
   _FamilyMember? get _selectedMember {
@@ -207,7 +206,6 @@ class _FamilyScreenState extends State<FamilyScreen> {
       if (!mounted) return;
       setState(() {
         _selectedContactIndex = null;
-        _fabExpanded = false;
       });
       AppToast.success(context, 'Contacto eliminado');
     } catch (e) {
@@ -218,7 +216,6 @@ class _FamilyScreenState extends State<FamilyScreen> {
   }
 
   void _showAddContactDialog() {
-    setState(() => _fabExpanded = false);
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -237,7 +234,6 @@ class _FamilyScreenState extends State<FamilyScreen> {
       return;
     }
 
-    setState(() => _fabExpanded = false);
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -328,113 +324,19 @@ class _FamilyScreenState extends State<FamilyScreen> {
                       },
                     ),
             ),
-      floatingActionButton: _buildFloatingCrudActions(),
-    );
-  }
-
-  Widget _buildFloatingCrudActions() {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        AnimatedSwitcher(
-          duration: const Duration(milliseconds: 200),
-          child: _fabExpanded
-              ? Column(
-                  key: const ValueKey('crud-actions-open'),
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    _buildActionFab(
-                      heroTag: 'fab_edit_contact',
-                      icon: Icons.edit,
-                      label: 'Editar',
-                      color: const Color(0xFF7FCCC4),
-                      onTap: _showEditContactDialog,
-                    ),
-                    const SizedBox(height: 10),
-                    _buildActionFab(
-                      heroTag: 'fab_delete_contact',
-                      icon: Icons.delete,
-                      label: 'Eliminar',
-                      color: const Color(0xFFFF5151),
-                      onTap: _deleteSelectedContact,
-                    ),
-                    const SizedBox(height: 10),
-                  ],
-                )
-              : const SizedBox.shrink(),
-        ),
-        _buildActionFab(
-          heroTag: 'fab_add_contact',
-          icon: _fabExpanded ? Icons.close : Icons.add,
-          label: _fabExpanded ? 'Cerrar' : 'Agregar',
-          color: const Color(0xFF7FCCC4),
-          onTap: () {
-            if (_fabExpanded) {
-              setState(() => _fabExpanded = false);
-              return;
-            }
-            if (_familyMembers.length >= 5) {
-              AppToast.warning(context, 'Maximo de 5 contactos permitidos');
-              return;
-            }
-            _showAddContactDialog();
-          },
-          mini: false,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildActionFab({
-    required String heroTag,
-    required IconData icon,
-    required String label,
-    required Color color,
-    required VoidCallback onTap,
-    bool mini = true,
-  }) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          decoration: BoxDecoration(
-            color: const Color(0xFFEEEEEE),
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFFA3B1C6).withValues(alpha: 0.25),
-                offset: const Offset(3, 3),
-                blurRadius: 6,
-              ),
-              const BoxShadow(
-                color: Colors.white,
-                offset: Offset(-3, -3),
-                blurRadius: 6,
-              ),
-            ],
-          ),
-          child: Text(
-            label,
-            style: const TextStyle(
-              color: Color(0xFF747877),
-              fontWeight: FontWeight.w600,
-              fontSize: 12,
-            ),
-          ),
-        ),
-        const SizedBox(width: 8),
-        FloatingActionButton(
-          heroTag: heroTag,
-          mini: mini,
-          backgroundColor: const Color(0xFFEEEEEE),
-          elevation: 0,
-          onPressed: onTap,
-          child: Icon(icon, color: color),
-        ),
-      ],
+      floatingActionButton: FloatingActionButton(
+        heroTag: 'fab_add_contact',
+        backgroundColor: const Color(0xFFEEEEEE),
+        elevation: 0,
+        onPressed: () {
+          if (_familyMembers.length >= 5) {
+            AppToast.warning(context, 'Maximo de 5 contactos permitidos');
+            return;
+          }
+          _showAddContactDialog();
+        },
+        child: const Icon(Icons.add, color: Color(0xFF7FCCC4)),
+      ),
     );
   }
 }
