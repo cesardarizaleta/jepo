@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../theme/app_theme.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
@@ -32,13 +33,13 @@ class NeumorphicContainer extends StatelessWidget {
         boxShadow: isPressed
             ? [
                 BoxShadow(
-                  color: AppTheme.shadowLight.withOpacity(0.5),
+                  color: AppTheme.shadowLight.withValues(alpha: 0.5),
                   offset: const Offset(2, 2),
                   blurRadius: 4,
                   spreadRadius: 0,
                 ),
                 BoxShadow(
-                  color: AppTheme.shadowDark.withOpacity(0.2),
+                  color: AppTheme.shadowDark.withValues(alpha: 0.2),
                   offset: const Offset(-2, -2),
                   blurRadius: 4,
                   spreadRadius: 0,
@@ -46,7 +47,7 @@ class NeumorphicContainer extends StatelessWidget {
               ]
             : [
                 BoxShadow(
-                  color: AppTheme.shadowDark.withOpacity(0.35),
+                  color: AppTheme.shadowDark.withValues(alpha: 0.35),
                   offset: const Offset(6, 6),
                   blurRadius: 12,
                   spreadRadius: 1,
@@ -122,7 +123,7 @@ class _NeumorphicButtonState extends State<NeumorphicButton> {
   }
 }
 
-class NeumorphicTextField extends StatelessWidget {
+class NeumorphicTextField extends StatefulWidget {
   final String hintText;
   final bool obscureText;
   final IconData? icon;
@@ -130,6 +131,8 @@ class NeumorphicTextField extends StatelessWidget {
   final TextInputType? keyboardType;
   final bool enabled;
   final ValueChanged<String>? onChanged;
+  final int? maxLength;
+  final List<TextInputFormatter>? inputFormatters;
 
   const NeumorphicTextField({
     super.key,
@@ -140,7 +143,22 @@ class NeumorphicTextField extends StatelessWidget {
     this.keyboardType,
     this.enabled = true,
     this.onChanged,
+    this.maxLength,
+    this.inputFormatters,
   });
+
+  @override
+  State<NeumorphicTextField> createState() => _NeumorphicTextFieldState();
+}
+
+class _NeumorphicTextFieldState extends State<NeumorphicTextField> {
+  late bool _obscured;
+
+  @override
+  void initState() {
+    super.initState();
+    _obscured = widget.obscureText;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -150,7 +168,7 @@ class NeumorphicTextField extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: AppTheme.shadowDark.withOpacity(0.2),
+            color: AppTheme.shadowDark.withValues(alpha: 0.2),
             offset: const Offset(2, 2),
             blurRadius: 4,
             spreadRadius: 0,
@@ -164,19 +182,34 @@ class NeumorphicTextField extends StatelessWidget {
         ],
       ),
       child: TextField(
-        controller: controller,
-        obscureText: obscureText,
-        keyboardType: keyboardType,
-        enabled: enabled,
-        onChanged: onChanged,
+        controller: widget.controller,
+        obscureText: _obscured,
+        keyboardType: widget.keyboardType,
+        enabled: widget.enabled,
+        onChanged: widget.onChanged,
+        maxLength: widget.maxLength,
+        inputFormatters: widget.inputFormatters,
         style: TextStyle(
-          color: enabled ? AppTheme.textDark : AppTheme.textLight,
+          color: widget.enabled ? AppTheme.textDark : AppTheme.textLight,
         ),
         decoration: InputDecoration(
           border: InputBorder.none,
-          hintText: hintText,
-          prefixIcon: icon != null
-              ? Icon(icon, color: AppTheme.textLight)
+          hintText: widget.hintText,
+          counterText: '',
+          prefixIcon: widget.icon != null
+              ? Icon(widget.icon, color: AppTheme.textLight)
+              : null,
+          suffixIcon: widget.obscureText
+              ? IconButton(
+                  icon: Icon(
+                    _obscured ? Icons.visibility_off : Icons.visibility,
+                    color: AppTheme.textLight,
+                    size: 20,
+                  ),
+                  onPressed: () {
+                    setState(() => _obscured = !_obscured);
+                  },
+                )
               : null,
           contentPadding: const EdgeInsets.symmetric(
             horizontal: 20,

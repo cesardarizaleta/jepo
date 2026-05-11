@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../main.dart';
 import '../theme/app_theme.dart';
 import '../widgets/neumorphic_container.dart';
@@ -16,7 +17,8 @@ class RegisterScreen extends StatefulWidget {
 }
 
 class _RegisterScreenState extends State<RegisterScreen> {
-  final _nameController = TextEditingController();
+  final _nombreController = TextEditingController();
+  final _apellidoController = TextEditingController();
   final _cedulaController = TextEditingController();
   final _phoneController = TextEditingController();
   final _emailController = TextEditingController();
@@ -44,15 +46,21 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
 
     try {
-      final fullName = _nameController.text.trim();
-      final parts = fullName.split(' ');
-      final nombre = parts.isNotEmpty ? parts.first : fullName;
-      final apellido = parts.length > 1 ? parts.sublist(1).join(' ') : '';
+      final nombre = _nombreController.text.trim();
+      final apellido = _apellidoController.text.trim();
       final email = _emailController.text.trim();
       final telefono = _phoneController.text.trim();
       final cedula = _cedulaController.text.trim();
       final password = _passwordController.text;
       final confirmPassword = _confirmPasswordController.text;
+
+      if (nombre.isEmpty) {
+        throw Exception('El nombre es requerido');
+      }
+
+      if (apellido.isEmpty) {
+        throw Exception('El apellido es requerido');
+      }
 
       if (cedula.isEmpty) {
         throw Exception('La cédula es requerida');
@@ -190,18 +198,28 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                 // Name Field
                 NeumorphicTextField(
-                  controller: _nameController,
-                  hintText: 'Nombre Completo',
+                  controller: _nombreController,
+                  hintText: 'Nombre',
                   icon: Icons.person_outline,
                 ),
                 const SizedBox(height: 20),
 
-                // Cedula Field
+                // Apellido Field
+                NeumorphicTextField(
+                  controller: _apellidoController,
+                  hintText: 'Apellido',
+                  icon: Icons.person_outline,
+                ),
+                const SizedBox(height: 20),
+
+                // Cedula Field (solo números, máximo 10 dígitos)
                 NeumorphicTextField(
                   controller: _cedulaController,
-                  hintText: 'Cédula',
+                  hintText: 'Cédula (solo números)',
                   icon: Icons.badge_outlined,
                   keyboardType: TextInputType.number,
+                  maxLength: 10,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                 ),
                 const SizedBox(height: 20),
 

@@ -203,15 +203,9 @@ class _NeumorphicCircleButtonState extends State<_NeumorphicCircleButton> {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTapDown: (_) => setState(() => _pressed = true),
-      onTapUp: (_) {
-        setState(() => _pressed = false);
-        // Defer callback to avoid setState-during-build when parent also
-        // calls setState inside onPressed.
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          widget.onPressed();
-        });
-      },
+      onTapUp: (_) => setState(() => _pressed = false),
       onTapCancel: () => setState(() => _pressed = false),
+      onTap: widget.onPressed,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 120),
         width: 36,

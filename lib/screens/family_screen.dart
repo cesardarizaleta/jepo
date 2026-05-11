@@ -39,14 +39,6 @@ class _FamilyScreenState extends State<FamilyScreen> {
   bool _hasSession = false;
   int? _selectedContactIndex;
 
-  _FamilyMember? get _selectedMember {
-    final idx = _selectedContactIndex;
-    if (idx == null || idx < 0 || idx >= _familyMembers.length) {
-      return null;
-    }
-    return _familyMembers[idx];
-  }
-
   @override
   void initState() {
     super.initState();
@@ -167,20 +159,40 @@ class _FamilyScreenState extends State<FamilyScreen> {
     }
   }
 
-  Future<void> _deleteSelectedContact() async {
-    final selected = _selectedMember;
-    if (selected == null) {
-      AppToast.warning(context, 'Selecciona un contacto para eliminar');
-      return;
-    }
+  void _showAddContactDialog() {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _ContactBottomSheet(
+        existingContacts: _familyMembers,
+        onSubmit: _addContact,
+      ),
+    );
+  }
 
+  void _showEditForMember(_FamilyMember member) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => _ContactBottomSheet(
+        initialMember: member,
+        existingContacts: _familyMembers,
+        onSubmit: (name, phone, priority) =>
+            _updateContact(member, name, phone, priority),
+      ),
+    );
+  }
+
+  void _showDeleteForMember(_FamilyMember member) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) {
         return AlertDialog(
           backgroundColor: const Color(0xFFEEEEEE),
           title: const Text('Eliminar contacto'),
-          content: Text('Se eliminara a ${selected.name} de tus contactos.'),
+          content: Text('Se eliminará a ${member.name} de tus contactos.'),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
@@ -198,53 +210,18 @@ class _FamilyScreenState extends State<FamilyScreen> {
       },
     );
 
-    if (confirmed != true || selected.id == null) return;
+    if (confirmed != true || member.id == null) return;
 
     try {
-      await EmergencyContactsService(appApi).deleteContact(selected.id!);
+      await EmergencyContactsService(appApi).deleteContact(member.id!);
       await _loadContacts();
       if (!mounted) return;
-      setState(() {
-        _selectedContactIndex = null;
-      });
       AppToast.success(context, 'Contacto eliminado');
     } catch (e) {
       debugPrint('Failed to delete contact: $e');
       if (!mounted) return;
       AppToast.error(context, 'Error al eliminar el contacto');
     }
-  }
-
-  void _showAddContactDialog() {
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => _ContactBottomSheet(
-        existingContacts: _familyMembers,
-        onSubmit: _addContact,
-      ),
-    );
-  }
-
-  void _showEditContactDialog() {
-    final selected = _selectedMember;
-    if (selected == null) {
-      AppToast.warning(context, 'Selecciona un contacto para editar');
-      return;
-    }
-
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => _ContactBottomSheet(
-        initialMember: selected,
-        existingContacts: _familyMembers,
-        onSubmit: (name, phone, priority) =>
-            _updateContact(selected, name, phone, priority),
-      ),
-    );
   }
 
   @override
@@ -308,20 +285,10 @@ class _FamilyScreenState extends State<FamilyScreen> {
                               });
                             },
                             onEdit: () {
-                              setState(() {
-                                _selectedContactIndex = index;
-                              });
-                              WidgetsBinding.instance.addPostFrameCallback((_) {
-                                if (mounted) _showEditContactDialog();
-                              });
+                              _showEditForMember(member);
                             },
                             onDelete: () {
-                              setState(() {
-                                _selectedContactIndex = index;
-                              });
-                              WidgetsBinding.instance.addPostFrameCallback((_) {
-                                if (mounted) _deleteSelectedContact();
-                              });
+                              _showDeleteForMember(member);
                             },
                           ),
                         );
