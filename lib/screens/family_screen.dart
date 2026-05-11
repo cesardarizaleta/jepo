@@ -7,6 +7,7 @@ import '../services/emergency_contacts_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/app_toast.dart';
 import '../utils/phone_utils.dart';
+import '../widgets/contact_card.dart';
 import '../widgets/contact_priority_selector.dart';
 import '../widgets/jepo_phone_input.dart';
 import '../widgets/neumorphic_container.dart';
@@ -300,103 +301,28 @@ class _FamilyScreenState extends State<FamilyScreen> {
 
                         return Padding(
                           padding: const EdgeInsets.only(bottom: 16),
-                          child: GestureDetector(
+                          child: ContactCard(
+                            name: member.name,
+                            phone: member.phone,
+                            priority: member.priority,
+                            isSelected: selected,
                             onTap: () {
                               setState(() {
                                 _selectedContactIndex = index;
                               });
                             },
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 180),
-                              padding: const EdgeInsets.all(2),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(18),
-                                border: Border.all(
-                                  color: selected
-                                      ? const Color(0xFF7FCCC4)
-                                      : Colors.transparent,
-                                  width: 1.4,
-                                ),
-                              ),
-                              child: Dismissible(
-                                key: ValueKey(member.id ?? member.phone),
-                                direction: DismissDirection.endToStart,
-                                onDismissed: (_) async {
-                                  if (member.id == null) return;
-                                  await EmergencyContactsService(
-                                    appApi,
-                                  ).deleteContact(member.id!);
-                                  await _loadContacts();
-                                },
-                                background: Container(
-                                  alignment: Alignment.centerRight,
-                                  padding: const EdgeInsets.only(right: 20),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFFF5151),
-                                    borderRadius: BorderRadius.circular(16),
-                                  ),
-                                  child: const Icon(
-                                    Icons.delete_outline,
-                                    color: Colors.white,
-                                    size: 28,
-                                  ),
-                                ),
-                                child: NeumorphicContainer(
-                                  useAnimation: false,
-                                  child: Row(
-                                    children: [
-                                      Container(
-                                        width: 50,
-                                        height: 50,
-                                        decoration: BoxDecoration(
-                                          color: const Color(
-                                            0xFF7FCCC4,
-                                          ).withValues(alpha: 0.3),
-                                          shape: BoxShape.circle,
-                                        ),
-                                        child: const Icon(
-                                          Icons.person,
-                                          color: Color(0xFF7FCCC4),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 16),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              member.name,
-                                              style: const TextStyle(
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 16,
-                                                color: AppTheme.textDark,
-                                              ),
-                                            ),
-                                            const SizedBox(height: 2),
-                                            Text(
-                                              'Prioridad ${member.priority}',
-                                              style: const TextStyle(
-                                                color: AppTheme.textLight,
-                                                fontSize: 14,
-                                              ),
-                                            ),
-                                            const SizedBox(height: 2),
-                                            Text(
-                                              member.phone,
-                                              style: const TextStyle(
-                                                color: AppTheme.textLight,
-                                                fontSize: 12,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
+                            onEdit: () {
+                              setState(() {
+                                _selectedContactIndex = index;
+                              });
+                              _showEditContactDialog();
+                            },
+                            onDelete: () {
+                              setState(() {
+                                _selectedContactIndex = index;
+                              });
+                              _deleteSelectedContact();
+                            },
                           ),
                         );
                       },
