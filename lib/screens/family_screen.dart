@@ -311,13 +311,17 @@ class _FamilyScreenState extends State<FamilyScreen> {
                               setState(() {
                                 _selectedContactIndex = index;
                               });
-                              _showEditContactDialog();
+                              WidgetsBinding.instance.addPostFrameCallback((_) {
+                                if (mounted) _showEditContactDialog();
+                              });
                             },
                             onDelete: () {
                               setState(() {
                                 _selectedContactIndex = index;
                               });
-                              _deleteSelectedContact();
+                              WidgetsBinding.instance.addPostFrameCallback((_) {
+                                if (mounted) _deleteSelectedContact();
+                              });
                             },
                           ),
                         );
