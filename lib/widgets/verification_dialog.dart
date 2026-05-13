@@ -101,10 +101,14 @@ class _VerificationDialogWidgetState extends State<VerificationDialogWidget> {
       await _service.verifyContact(widget.contactId, otp);
       if (!mounted) return;
       AppToast.success(context, 'Contacto verificado');
-      Navigator.of(context).pop(true);
+      if (mounted && Navigator.of(context).canPop()) {
+        Navigator.of(context).pop(true);
+      }
     } catch (e) {
       if (!mounted) return;
-      final msg = _formatError(e, fallback: 'Código incorrecto');
+      // A 401 here means "invalid OTP", NOT "session expired". Show the
+      // error message without triggering the global unauthorized handler.
+      final msg = _formatError(e, fallback: 'Código incorrecto o expirado');
       AppToast.error(context, msg);
     } finally {
       if (mounted) setState(() => _isVerifying = false);

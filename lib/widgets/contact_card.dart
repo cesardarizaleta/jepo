@@ -74,24 +74,24 @@ class ContactCard extends StatelessWidget {
                 ReorderableDragStartListener(
                   index: priority - 1,
                   child: Padding(
-                    padding: const EdgeInsets.only(right: 8),
+                    padding: const EdgeInsets.only(right: 6),
                     child: Icon(
                       Icons.drag_indicator,
                       color: _textPrimary.withValues(alpha: 0.4),
-                      size: 22,
+                      size: 20,
                     ),
                   ),
                 ),
                 _buildAvatar(),
-                const SizedBox(width: 12),
+                const SizedBox(width: 10),
                 Expanded(child: _buildInfo()),
-                const SizedBox(width: 6),
+                const SizedBox(width: 4),
                 _NeumorphicCircleButton(
                   icon: Icons.edit_outlined,
                   iconColor: _accent,
                   onPressed: onEdit,
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 6),
                 _NeumorphicCircleButton(
                   icon: Icons.delete_outline,
                   iconColor: _danger,
@@ -130,8 +130,8 @@ class ContactCard extends StatelessWidget {
 
   Widget _buildAvatar() {
     return Container(
-      width: 48,
-      height: 48,
+      width: 42,
+      height: 42,
       decoration: BoxDecoration(
         color: _accent.withValues(alpha: 0.25),
         shape: BoxShape.circle,
@@ -142,7 +142,7 @@ class ContactCard extends StatelessWidget {
           style: const TextStyle(
             color: _accent,
             fontWeight: FontWeight.bold,
-            fontSize: 16,
+            fontSize: 14,
           ),
         ),
       ),

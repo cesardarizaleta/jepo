@@ -28,11 +28,7 @@ class ApiException implements Exception {
   });
 
   factory ApiException.network({required String message}) {
-    return ApiException(
-      statusCode: 0,
-      message: message,
-      transient: true,
-    );
+    return ApiException(statusCode: 0, message: message, transient: true);
   }
 
   bool get isTransient => transient;
@@ -202,7 +198,8 @@ class ApiClient {
     if (apiKey == null || apiKey.isEmpty) {
       throw const ApiException(
         statusCode: 500,
-        message: 'La clave API no está configurada. Establezca JEPO_API_KEY o un valor seguro.',
+        message:
+            'La clave API no está configurada. Establezca JEPO_API_KEY o un valor seguro.',
         transient: false,
       );
     }
@@ -213,7 +210,8 @@ class ApiClient {
       if (accessToken == null || accessToken.isEmpty) {
         throw const ApiException(
           statusCode: 401,
-          message: 'Falta el token de acceso. Por favor, inicie sesión de nuevo.',
+          message:
+              'Falta el token de acceso. Por favor, inicie sesión de nuevo.',
           transient: false,
         );
       }
@@ -297,7 +295,8 @@ class ApiClient {
     if (error is TimeoutException) {
       return const ApiException(
         statusCode: 0,
-        message: 'Tiempo de espera agotado. Por favor, compruebe la conectividad e inténtelo de nuevo.',
+        message:
+            'Tiempo de espera agotado. Por favor, compruebe la conectividad e inténtelo de nuevo.',
         transient: true,
       );
     }
@@ -323,15 +322,15 @@ class ApiClient {
     var attempt = 0;
     while (true) {
       try {
-        final uri = Uri.parse(baseUrl + path).replace(queryParameters: queryParameters);
+        final uri = Uri.parse(
+          baseUrl + path,
+        ).replace(queryParameters: queryParameters);
         final headers = await _defaultHeaders(requiresAuth: requiresAuth);
         _debugLogRequest(method, uri, headers, body);
 
         late final http.Response resp;
         if (method == 'GET') {
-          resp = await _httpClient
-              .get(uri, headers: headers)
-              .timeout(timeout);
+          resp = await _httpClient.get(uri, headers: headers).timeout(timeout);
         } else if (method == 'POST') {
           resp = await _httpClient
               .post(
@@ -358,7 +357,14 @@ class ApiClient {
 
         final envelope = _parseEnvelope(resp);
         if (resp.statusCode == 401) {
-          await _onUnauthorized();
+          // Only trigger session invalidation for actual auth failures.
+          // Endpoints like /verificar and /reset-password return 401 for
+          // "invalid OTP" — those are NOT session expirations.
+          final isOtpEndpoint =
+              path.contains('/verificar') || path.contains('/reset-password');
+          if (!isOtpEndpoint) {
+            await _onUnauthorized();
+          }
         }
 
         if (resp.statusCode >= 200 && resp.statusCode < 300) {
@@ -376,9 +382,7 @@ class ApiClient {
         ).._logTodiagnostics(path);
       } catch (error) {
         final apiError = _networkException(error);
-        final canRetry =
-            apiError.isTransient &&
-            attempt + 1 < maxAttempts;
+        final canRetry = apiError.isTransient && attempt + 1 < maxAttempts;
 
         if (!canRetry) {
           rethrow;
