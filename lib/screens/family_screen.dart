@@ -8,7 +8,6 @@ import '../theme/app_theme.dart';
 import '../utils/app_toast.dart';
 import '../utils/phone_utils.dart';
 import '../widgets/contact_card.dart';
-import '../widgets/contact_priority_selector.dart';
 import '../widgets/jepo_phone_input.dart';
 import '../widgets/neumorphic_container.dart';
 import '../widgets/verification_dialog.dart';
@@ -42,7 +41,6 @@ class _FamilyScreenState extends State<FamilyScreen> {
   List<_FamilyMember> _familyMembers = <_FamilyMember>[];
   bool _isLoading = true;
   bool _hasSession = false;
-  int? _selectedContactIndex;
 
   @override
   void initState() {
@@ -59,7 +57,6 @@ class _FamilyScreenState extends State<FamilyScreen> {
       if (!mounted) return;
       setState(() {
         _familyMembers = <_FamilyMember>[];
-        _selectedContactIndex = null;
         _isLoading = false;
       });
       return;
@@ -86,11 +83,6 @@ class _FamilyScreenState extends State<FamilyScreen> {
       if (!mounted) return;
       setState(() {
         _familyMembers = mapped;
-        if (_selectedContactIndex != null &&
-            (_selectedContactIndex! < 0 ||
-                _selectedContactIndex! >= mapped.length)) {
-          _selectedContactIndex = null;
-        }
         _isLoading = false;
       });
     } catch (e) {
@@ -104,15 +96,56 @@ class _FamilyScreenState extends State<FamilyScreen> {
         msg = e.toString();
       }
       AppToast.error(context, msg);
-      setState(() {
-        _isLoading = false;
-      });
+      setState(() => _isLoading = false);
     }
   }
 
-  /// Creates the contact. On success, triggers the verification dialog
-  /// automatically for the freshly created contact.
-  Future<void> _addContact(String name, String phone, int priority) async {
+  // ─── REORDER (Optimistic UI) ──────────────────────────────────────────
+
+  void _onReorder(int oldIndex, int newIndex) {
+    // ReorderableListView passes newIndex BEFORE removal, so adjust.
+    if (newIndex > oldIndex) newIndex--;
+
+    final list = List<_FamilyMember>.from(_familyMembers);
+    final item = list.removeAt(oldIndex);
+    list.insert(newIndex, item);
+
+    // Optimistic: update UI immediately with recalculated priorities.
+    final reordered = List.generate(list.length, (i) {
+      final m = list[i];
+      return _FamilyMember(
+        id: m.id,
+        name: m.name,
+        phone: m.phone,
+        priority: i + 1,
+        status: m.status,
+      );
+    });
+
+    setState(() => _familyMembers = reordered);
+
+    // Fire-and-forget: sync to backend.
+    _syncReorder(reordered);
+  }
+
+  Future<void> _syncReorder(List<_FamilyMember> ordered) async {
+    final order = ordered
+        .where((m) => m.id != null)
+        .map((m) => {'id': m.id!, 'prioridad': m.priority})
+        .toList(growable: false);
+
+    try {
+      await EmergencyContactsService(appApi).reorderContacts(order);
+    } catch (e) {
+      debugPrint('Reorder sync failed: $e');
+      // Rollback: reload from server.
+      if (mounted) await _loadContacts();
+    }
+  }
+
+  // ─── CRUD ─────────────────────────────────────────────────────────────
+
+  Future<void> _addContact(String name, String phone) async {
     if (!_hasSession) return;
 
     try {
@@ -121,7 +154,7 @@ class _FamilyScreenState extends State<FamilyScreen> {
         CreateEmergencyContactDto(
           nombreContacto: name,
           telefonoContacto: phone,
-          prioridad: priority,
+          prioridad: _familyMembers.length + 1,
         ),
       );
 
@@ -129,9 +162,7 @@ class _FamilyScreenState extends State<FamilyScreen> {
       if (!mounted) return;
       AppToast.success(context, 'Contacto añadido. Verifica el código.');
 
-      // ── AUTO-OPEN VERIFICATION DIALOG ──────────────────────────────
       if (created?.id != null) {
-        // Let the sheet close and the list rebuild before opening the dialog.
         await Future<void>.delayed(const Duration(milliseconds: 250));
         if (!mounted) return;
         await showVerificationDialog(
@@ -140,7 +171,7 @@ class _FamilyScreenState extends State<FamilyScreen> {
           contactName: created.nombreContacto,
         );
         if (!mounted) return;
-        await _loadContacts(); // reflect VERIFIED/PENDING after the dialog
+        await _loadContacts();
       }
     } catch (e) {
       debugPrint('Failed to add contact: $e');
@@ -157,18 +188,18 @@ class _FamilyScreenState extends State<FamilyScreen> {
     _FamilyMember member,
     String name,
     String phone,
-    int priority,
   ) async {
     if (member.id == null) return;
 
     try {
       final ecService = EmergencyContactsService(appApi);
-      final payload = UpdateEmergencyContactDto(
-        nombreContacto: name,
-        telefonoContacto: phone,
-        prioridad: priority,
+      await ecService.updateContact(
+        member.id!,
+        UpdateEmergencyContactDto(
+          nombreContacto: name,
+          telefonoContacto: phone,
+        ),
       );
-      await ecService.updateContact(member.id!, payload);
       await _loadContacts();
       if (!mounted) return;
       AppToast.success(context, 'Contacto actualizado');
@@ -203,8 +234,7 @@ class _FamilyScreenState extends State<FamilyScreen> {
       builder: (ctx) => _ContactBottomSheet(
         initialMember: member,
         existingContacts: _familyMembers,
-        onSubmit: (name, phone, priority) =>
-            _updateContact(member, name, phone, priority),
+        onSubmit: (name, phone) => _updateContact(member, name, phone),
       ),
     );
   }
@@ -248,9 +278,6 @@ class _FamilyScreenState extends State<FamilyScreen> {
     }
   }
 
-  /// Opens the verification dialog for a specific contact. After the dialog
-  /// closes (whether the contact was verified or not), the list is reloaded
-  /// so the badge updates.
   Future<void> _showVerifyForMember(_FamilyMember member) async {
     if (member.id == null) return;
     await showVerificationDialog(
@@ -261,6 +288,8 @@ class _FamilyScreenState extends State<FamilyScreen> {
     if (!mounted) return;
     await _loadContacts();
   }
+
+  // ─── BUILD ────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -303,26 +332,22 @@ class _FamilyScreenState extends State<FamilyScreen> {
                         ),
                       ],
                     )
-                  : ListView.builder(
+                  : ReorderableListView.builder(
                       padding: const EdgeInsets.all(20),
                       itemCount: _familyMembers.length,
+                      onReorder: _onReorder,
+                      proxyDecorator: _proxyDecorator,
                       itemBuilder: (context, index) {
                         final member = _familyMembers[index];
-                        final selected = _selectedContactIndex == index;
 
                         return Padding(
+                          key: ValueKey(member.id ?? index),
                           padding: const EdgeInsets.only(bottom: 16),
                           child: ContactCard(
                             name: member.name,
                             phone: member.phone,
                             priority: member.priority,
-                            isSelected: selected,
                             status: _mapStatus(member.status),
-                            onTap: () {
-                              setState(() {
-                                _selectedContactIndex = index;
-                              });
-                            },
                             onEdit: () => _showEditForMember(member),
                             onDelete: () => _showDeleteForMember(member),
                             onVerify: member.isPending
@@ -355,6 +380,37 @@ class _FamilyScreenState extends State<FamilyScreen> {
     );
   }
 
+  /// Proxy decorator: when dragging, the card gets a deeper shadow and
+  /// slight scale-up to simulate lifting off the neumorphic surface.
+  Widget _proxyDecorator(Widget child, int index, Animation<double> animation) {
+    return AnimatedBuilder(
+      animation: animation,
+      builder: (context, child) {
+        final elevation = Tween<double>(begin: 0, end: 12).evaluate(animation);
+        return Material(
+          color: Colors.transparent,
+          elevation: 0,
+          child: Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFFEEEEEE),
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFFA3B1C6).withValues(alpha: 0.6),
+                  offset: Offset(0, elevation),
+                  blurRadius: elevation * 2,
+                  spreadRadius: 2,
+                ),
+              ],
+            ),
+            child: child,
+          ),
+        );
+      },
+      child: child,
+    );
+  }
+
   ContactCardStatus _mapStatus(ContactVerificationStatus s) {
     switch (s) {
       case ContactVerificationStatus.verified:
@@ -367,10 +423,14 @@ class _FamilyScreenState extends State<FamilyScreen> {
   }
 }
 
+// ═════════════════════════════════════════════════════════════════════════
+//  Bottom Sheet — Only Name + Phone (no priority selector)
+// ═════════════════════════════════════════════════════════════════════════
+
 class _ContactBottomSheet extends StatefulWidget {
   final _FamilyMember? initialMember;
   final List<_FamilyMember> existingContacts;
-  final Future<void> Function(String name, String phone, int priority) onSubmit;
+  final Future<void> Function(String name, String phone) onSubmit;
 
   const _ContactBottomSheet({
     required this.existingContacts,
@@ -385,7 +445,6 @@ class _ContactBottomSheet extends StatefulWidget {
 class _ContactBottomSheetState extends State<_ContactBottomSheet> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
-  int _selectedPriority = 3;
   bool _isLoading = false;
   bool _phoneValid = false;
 
@@ -398,7 +457,6 @@ class _ContactBottomSheetState extends State<_ContactBottomSheet> {
     if (initial != null) {
       _nameController.text = initial.name;
       _phoneController.text = _toLocalPhone(initial.phone);
-      _selectedPriority = initial.priority.clamp(1, 3);
     }
   }
 
@@ -454,7 +512,7 @@ class _ContactBottomSheetState extends State<_ContactBottomSheet> {
               ),
               const SizedBox(height: 8),
               const Text(
-                'Define prioridad y telefono de contacto para alertas de emergencia.',
+                'Ingresa nombre y teléfono. La prioridad se define arrastrando las tarjetas.',
                 style: TextStyle(color: Color(0xFF747877), fontSize: 14),
               ),
               const SizedBox(height: 24),
@@ -472,15 +530,6 @@ class _ContactBottomSheetState extends State<_ContactBottomSheet> {
                   if (_phoneValid != isValid) {
                     setState(() => _phoneValid = isValid);
                   }
-                },
-              ),
-              const SizedBox(height: 18),
-              _buildLabel('Prioridad de contacto'),
-              const SizedBox(height: 8),
-              ContactPrioritySelector(
-                selectedPriority: _selectedPriority,
-                onChanged: (priority) {
-                  setState(() => _selectedPriority = priority);
                 },
               ),
               const SizedBox(height: 28),
@@ -581,7 +630,7 @@ class _ContactBottomSheetState extends State<_ContactBottomSheet> {
         }
       }
 
-      await widget.onSubmit(name, phone, _selectedPriority);
+      await widget.onSubmit(name, phone);
       if (mounted) Navigator.pop(context);
     } catch (e) {
       if (mounted) AppToast.error(context, 'Error: $e');

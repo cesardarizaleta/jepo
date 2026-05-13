@@ -136,4 +136,16 @@ class EmergencyContactsService {
       requiresAuth: true,
     );
   }
+
+  /// Bulk-update the priority order of all contacts.
+  ///
+  /// [order] is a list of `{ "id": <int>, "prioridad": <int> }` maps
+  /// where `prioridad` is the 1-based visual position.
+  Future<void> reorderContacts(List<Map<String, int>> order) async {
+    await api.patchEnvelope(
+      '/api/usuarios/contactos/reordenar',
+      body: {'orden': order},
+      requiresAuth: true,
+    );
+  }
 }

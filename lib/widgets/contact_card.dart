@@ -12,13 +12,10 @@ class ContactCard extends StatelessWidget {
   final String phone;
   final int priority;
   final ContactCardStatus status;
-  final bool isSelected;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
-  final VoidCallback? onTap;
 
   /// Invoked when the user taps the "Verificar" button on a PENDING card.
-  /// Not called when [status] is not pending.
   final VoidCallback? onVerify;
 
   const ContactCard({
@@ -29,8 +26,6 @@ class ContactCard extends StatelessWidget {
     required this.onEdit,
     required this.onDelete,
     this.status = ContactCardStatus.verified,
-    this.isSelected = false,
-    this.onTap,
     this.onVerify,
   });
 
@@ -46,90 +41,88 @@ class ContactCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.all(2),
+    return Container(
+      padding: const EdgeInsets.all(2),
+      decoration: BoxDecoration(borderRadius: BorderRadius.circular(20)),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: isSelected ? _accent : Colors.transparent,
-            width: 1.5,
-          ),
+          color: _surface,
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: const [
+            BoxShadow(
+              color: _shadowDark,
+              offset: Offset(5, 5),
+              blurRadius: 10,
+              spreadRadius: 1,
+            ),
+            BoxShadow(
+              color: _shadowLight,
+              offset: Offset(-5, -5),
+              blurRadius: 10,
+              spreadRadius: 1,
+            ),
+          ],
         ),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          decoration: BoxDecoration(
-            color: _surface,
-            borderRadius: BorderRadius.circular(18),
-            boxShadow: const [
-              BoxShadow(
-                color: _shadowDark,
-                offset: Offset(5, 5),
-                blurRadius: 10,
-                spreadRadius: 1,
-              ),
-              BoxShadow(
-                color: _shadowLight,
-                offset: Offset(-5, -5),
-                blurRadius: 10,
-                spreadRadius: 1,
-              ),
-            ],
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Main row
-              Row(
-                children: [
-                  _buildAvatar(),
-                  const SizedBox(width: 14),
-                  Expanded(child: _buildInfo()),
-                  const SizedBox(width: 8),
-                  _NeumorphicCircleButton(
-                    icon: Icons.edit_outlined,
-                    iconColor: _accent,
-                    onPressed: onEdit,
-                  ),
-                  const SizedBox(width: 10),
-                  _NeumorphicCircleButton(
-                    icon: Icons.delete_outline,
-                    iconColor: _danger,
-                    onPressed: onDelete,
-                  ),
-                ],
-              ),
-
-              // PENDING: show verify CTA below
-              if (_isPending) ...[
-                const SizedBox(height: 12),
-                const Divider(
-                  height: 1,
-                  thickness: 1,
-                  color: Color(0x22A3B1C6),
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    const Expanded(
-                      child: Text(
-                        'Aún no verificado. Pide el código al contacto.',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: _textPrimary,
-                          fontStyle: FontStyle.italic,
-                        ),
-                      ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Main row
+            Row(
+              children: [
+                // ─── Drag Handle ────────────────────────────────────
+                ReorderableDragStartListener(
+                  index: priority - 1,
+                  child: Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: Icon(
+                      Icons.drag_indicator,
+                      color: _textPrimary.withValues(alpha: 0.4),
+                      size: 22,
                     ),
-                    const SizedBox(width: 10),
-                    _VerifyPillButton(onPressed: onVerify ?? () {}),
-                  ],
+                  ),
+                ),
+                _buildAvatar(),
+                const SizedBox(width: 12),
+                Expanded(child: _buildInfo()),
+                const SizedBox(width: 6),
+                _NeumorphicCircleButton(
+                  icon: Icons.edit_outlined,
+                  iconColor: _accent,
+                  onPressed: onEdit,
+                ),
+                const SizedBox(width: 8),
+                _NeumorphicCircleButton(
+                  icon: Icons.delete_outline,
+                  iconColor: _danger,
+                  onPressed: onDelete,
                 ),
               ],
+            ),
+
+            // PENDING: show verify CTA below
+            if (_isPending) ...[
+              const SizedBox(height: 12),
+              const Divider(height: 1, thickness: 1, color: Color(0x22A3B1C6)),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'Aún no verificado. Pide el código al contacto.',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: _textPrimary,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  _VerifyPillButton(onPressed: onVerify ?? () {}),
+                ],
+              ),
             ],
-          ),
+          ],
         ),
       ),
     );
