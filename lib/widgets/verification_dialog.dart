@@ -14,8 +14,6 @@ const Color _accent = Color(0xFF7FCCC4);
 const Color _warning = Color(0xFFFFB74D);
 const Color _warningDark = Color(0xFFB97A10);
 const Color _textPrimary = Color(0xFF747877);
-const Color _shadowDark = Color(0xFFA3B1C6);
-const Color _shadowLight = Colors.white;
 
 /// Shows the neumorphic verification dialog for a contact that is still
 /// in PENDING state.
@@ -152,18 +150,11 @@ class _VerificationDialogWidgetState extends State<VerificationDialogWidget> {
         decoration: BoxDecoration(
           color: _surface,
           borderRadius: BorderRadius.circular(24),
-          boxShadow: const [
+          boxShadow: [
             BoxShadow(
-              color: _shadowDark,
-              offset: Offset(8, 8),
-              blurRadius: 16,
-              spreadRadius: 2,
-            ),
-            BoxShadow(
-              color: _shadowLight,
-              offset: Offset(-8, -8),
-              blurRadius: 16,
-              spreadRadius: 2,
+              color: Colors.black.withValues(alpha: 0.18),
+              offset: const Offset(0, 10),
+              blurRadius: 24,
             ),
           ],
         ),
