@@ -4,12 +4,14 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'services/api_client.dart';
 import 'services/alert_queue_service.dart';
 import 'services/auth_service.dart';
 import 'services/session_events.dart';
 import 'services/pre_alert_service.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:flutter_phone_direct_caller/flutter_phone_direct_caller.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
 import 'theme/app_theme.dart';
@@ -531,6 +533,94 @@ class _HomeScreenState extends State<HomeScreen> {
     if (mounted) setState(() => _loadingUser = false);
   }
 
+  void _shareLocation(BuildContext context) {
+    _shareRealLocation(context);
+  }
+
+  Future<void> _shareRealLocation(BuildContext context) async {
+    try {
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          if (context.mounted) {
+            AppToast.error(context, 'Permiso de ubicación denegado');
+          }
+          return;
+        }
+      }
+
+      if (!context.mounted) return;
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) =>
+            Center(
+                  child: NeumorphicContainer(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 40,
+                      vertical: 30,
+                    ),
+                    borderRadius: 30,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const SizedBox(
+                              width: 50,
+                              height: 50,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 3,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  AppTheme.primary,
+                                ),
+                              ),
+                            )
+                            .animate(onPlay: (c) => c.repeat())
+                            .shimmer(duration: 1200.ms, color: Colors.white24),
+                        const SizedBox(height: 25),
+                        const Text(
+                          'PREPARANDO',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 2,
+                            fontSize: 12,
+                            color: AppTheme.textLight,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          'Tu Ubicación',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 18,
+                            color: AppTheme.textDark,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+                .animate()
+                .fadeIn(duration: 300.ms)
+                .scale(begin: const Offset(0.9, 0.9)),
+      );
+
+      final pos = await Geolocator.getCurrentPosition();
+      final url = 'https://maps.google.com/?q=${pos.latitude},${pos.longitude}';
+
+      if (context.mounted) Navigator.of(context).pop();
+
+      // ignore: deprecated_member_use
+      Share.share('¡Ayuda! Necesito asistencia. Mi ubicación actual es: $url');
+    } catch (e) {
+      debugPrint('Error obtaining location: $e');
+      if (context.mounted) {
+        Navigator.of(context).pop();
+        AppToast.error(context, 'No se pudo obtener la ubicación');
+      }
+    }
+  }
+
   Future<void> _callEmergency(BuildContext context) async {
     const number = '911'; // Emergency number
 
@@ -680,6 +770,15 @@ class _HomeScreenState extends State<HomeScreen> {
                       )
                       .animate()
                       .fadeIn(delay: 400.ms)
+                      .scale(curve: Curves.easeOutBack),
+                  _buildMenuCard(
+                        context,
+                        title: 'Compartir',
+                        icon: Icons.share_location,
+                        onTap: () => _shareLocation(context),
+                      )
+                      .animate()
+                      .fadeIn(delay: 500.ms)
                       .scale(curve: Curves.easeOutBack),
                 ],
               ),
