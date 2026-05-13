@@ -18,9 +18,7 @@ class EmergencyContactsService {
         if (value is! List) return const <EmergencyContact>[];
         return value
             .whereType<Map>()
-            .map(
-              (e) => EmergencyContact.fromJson(e.cast<String, dynamic>()),
-            )
+            .map((e) => EmergencyContact.fromJson(e.cast<String, dynamic>()))
             .toList(growable: false);
       },
     );
@@ -31,7 +29,9 @@ class EmergencyContactsService {
     return sorted;
   }
 
-  Future<EmergencyContact?> createContact(CreateEmergencyContactDto payload) async {
+  Future<EmergencyContact?> createContact(
+    CreateEmergencyContactDto payload,
+  ) async {
     final envelope = await api.postEnvelope(
       '/api/usuarios/contactos',
       body: payload.toJson(),
@@ -98,5 +98,42 @@ class EmergencyContactsService {
 
   Future<void> deleteContact(int id) async {
     await api.delete('/api/usuarios/contactos/$id', requiresAuth: true);
+  }
+
+  /// Verify the contact by consuming the 6-digit OTP it received via
+  /// WhatsApp. Returns the updated [EmergencyContact] (now VERIFIED).
+  ///
+  /// Throws [ApiException] with `statusCode == 401` when the code is
+  /// invalid, expired, or the user exhausted the 3 allowed attempts.
+  Future<EmergencyContact?> verifyContact(int id, String otp) async {
+    final envelope = await api.postEnvelope(
+      '/api/usuarios/contactos/$id/verificar',
+      body: {'codigo': otp},
+      requiresAuth: true,
+    );
+    final response = ApiResponse<EmergencyContact>.fromJson(
+      envelope.raw,
+      dataParser: (value) {
+        if (value is Map<String, dynamic>) {
+          return EmergencyContact.fromJson(value);
+        }
+        if (value is Map) {
+          return EmergencyContact.fromJson(value.cast<String, dynamic>());
+        }
+        return null;
+      },
+    );
+    return response.data;
+  }
+
+  /// Invalidate the current OTP and request a new one for the given
+  /// contact. Subject to a 60 s cooldown and max 3 active resends per
+  /// contact on the backend.
+  Future<void> resendContactCode(int id) async {
+    await api.postEnvelope(
+      '/api/usuarios/contactos/$id/reenviar-codigo',
+      body: const <String, dynamic>{},
+      requiresAuth: true,
+    );
   }
 }

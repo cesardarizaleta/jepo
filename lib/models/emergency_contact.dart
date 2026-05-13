@@ -1,11 +1,43 @@
 import '../utils/phone_utils.dart';
 
+/// Possible verification states of an emergency contact returned by the API.
+enum ContactVerificationStatus {
+  pending,
+  verified,
+  rejected;
+
+  static ContactVerificationStatus fromString(String? raw) {
+    switch (raw?.toUpperCase()) {
+      case 'VERIFIED':
+        return ContactVerificationStatus.verified;
+      case 'REJECTED':
+        return ContactVerificationStatus.rejected;
+      case 'PENDING':
+      default:
+        return ContactVerificationStatus.pending;
+    }
+  }
+
+  String get apiValue {
+    switch (this) {
+      case ContactVerificationStatus.pending:
+        return 'PENDING';
+      case ContactVerificationStatus.verified:
+        return 'VERIFIED';
+      case ContactVerificationStatus.rejected:
+        return 'REJECTED';
+    }
+  }
+}
+
 class EmergencyContact {
   final int? id;
   final int? idUsuario;
   final String nombreContacto;
   final String telefonoContacto;
   final int prioridad;
+  final ContactVerificationStatus estadoVerificacion;
+  final DateTime? acceptedAt;
 
   const EmergencyContact({
     required this.id,
@@ -13,7 +45,13 @@ class EmergencyContact {
     required this.nombreContacto,
     required this.telefonoContacto,
     required this.prioridad,
+    this.estadoVerificacion = ContactVerificationStatus.pending,
+    this.acceptedAt,
   });
+
+  bool get isVerified =>
+      estadoVerificacion == ContactVerificationStatus.verified;
+  bool get isPending => estadoVerificacion == ContactVerificationStatus.pending;
 
   factory EmergencyContact.fromJson(Map<String, dynamic> json) {
     return EmergencyContact(
@@ -22,6 +60,10 @@ class EmergencyContact {
       nombreContacto: json['nombre_contacto']?.toString() ?? '',
       telefonoContacto: json['telefono_contacto']?.toString() ?? '',
       prioridad: _toInt(json['prioridad']) ?? 1,
+      estadoVerificacion: ContactVerificationStatus.fromString(
+        json['estado_verificacion']?.toString(),
+      ),
+      acceptedAt: _toDate(json['accepted_at']),
     );
   }
 
@@ -32,12 +74,19 @@ class EmergencyContact {
       'nombre_contacto': nombreContacto,
       'telefono_contacto': telefonoContacto,
       'prioridad': prioridad,
+      'estado_verificacion': estadoVerificacion.apiValue,
+      'accepted_at': acceptedAt?.toUtc().toIso8601String(),
     };
   }
 
   static int? _toInt(dynamic value) {
     if (value is int) return value;
     return int.tryParse(value?.toString() ?? '');
+  }
+
+  static DateTime? _toDate(dynamic value) {
+    if (value == null) return null;
+    return DateTime.tryParse(value.toString())?.toUtc();
   }
 }
 

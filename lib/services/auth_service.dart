@@ -54,6 +54,53 @@ class AuthService {
     return _persistSessionFromAuthResponse(envelope.raw);
   }
 
+  /// Request a password-reset OTP to be delivered via [method] ('email' or
+  /// 'whatsapp') to the account owning [emailOrPhone].
+  ///
+  /// The backend always replies `200` to prevent account enumeration, so
+  /// this method returns a boolean indicating whether the request was
+  /// accepted (not whether the account exists).
+  Future<bool> forgotPassword({
+    required String emailOrPhone,
+    required String method,
+  }) async {
+    assert(
+      method == 'email' || method == 'whatsapp',
+      'method must be "email" or "whatsapp"',
+    );
+
+    final normalized = emailOrPhone.contains('@')
+        ? emailOrPhone.trim()
+        : normalizePhoneForApi(emailOrPhone);
+
+    final envelope = await api.postEnvelope(
+      '/api/auth/forgot-password',
+      body: {'email_or_phone': normalized, 'method': method},
+    );
+    return envelope.success;
+  }
+
+  /// Consume the OTP and rotate the user's password. All previously issued
+  /// JWTs for this user are invalidated server-side.
+  Future<void> resetPassword({
+    required String emailOrPhone,
+    required String otp,
+    required String newPassword,
+  }) async {
+    final normalized = emailOrPhone.contains('@')
+        ? emailOrPhone.trim()
+        : normalizePhoneForApi(emailOrPhone);
+
+    await api.postEnvelope(
+      '/api/auth/reset-password',
+      body: {
+        'email_or_phone': normalized,
+        'otp': otp,
+        'new_password': newPassword,
+      },
+    );
+  }
+
   Future<User?> me() async {
     final envelope = await api.getEnvelope('/api/auth/me', requiresAuth: true);
     final response = ApiResponse<User>.fromJson(

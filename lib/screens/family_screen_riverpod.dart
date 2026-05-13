@@ -1,20 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../models/emergency_contact.dart';
 import '../providers/contacts_provider.dart';
 import '../theme/app_theme.dart';
 import '../utils/app_toast.dart';
 import '../widgets/contact_card.dart';
+import '../widgets/verify_contact_dialog.dart';
 
-/// Family screen rewritten with Riverpod.
-///
-/// - Zero `setState()` calls: the entire async lifecycle is handled by
-///   `FutureProvider.autoDispose` + `AsyncValue.when(...)`.
-/// - Edits / deletes mutate through [contactsMutationsProvider] which
-///   invalidates the provider, triggering a clean rebuild with fresh data.
-/// - No more "setState during build" crashes — callbacks simply push routes
-///   or invoke mutations; rebuilds are driven by Riverpod, not by the
-///   widget's own gesture handlers.
+/// Family screen powered entirely by Riverpod — no setState anywhere.
 class FamilyScreenRiverpod extends ConsumerWidget {
   const FamilyScreenRiverpod({super.key});
 
@@ -37,98 +31,63 @@ class FamilyScreenRiverpod extends ConsumerWidget {
         onRefresh: () async => ref.invalidate(contactsProvider),
         color: AppTheme.primary,
         child: contactsAsync.when(
-          // ─── LOADING ─────────────────────────────────────────────────
           loading: () => const Center(child: CircularProgressIndicator()),
-
-          // ─── ERROR ───────────────────────────────────────────────────
-          error: (error, stack) => ListView(
-            children: [
-              SizedBox(
-                height: MediaQuery.of(context).size.height * 0.7,
-                child: Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Text(
-                      'No se pudieron cargar los contactos.\n$error',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(color: AppTheme.textLight),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-
-          // ─── DATA ────────────────────────────────────────────────────
-          data: (contacts) {
-            if (contacts.isEmpty) {
-              return ListView(
-                children: [
-                  SizedBox(
-                    height: MediaQuery.of(context).size.height * 0.7,
-                    child: const Center(
-                      child: Text(
-                        'No se han añadido contactos de emergencia.\n'
-                        'Toca + para añadir contactos.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: AppTheme.textLight),
+          error: (e, _) => _errorState(context, e),
+          data: (contacts) => contacts.isEmpty
+              ? _emptyState(context)
+              : ListView.builder(
+                  padding: const EdgeInsets.all(20),
+                  itemCount: contacts.length,
+                  itemBuilder: (ctx, i) {
+                    final c = contacts[i];
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: ContactCard(
+                        name: c.name,
+                        phone: c.phone,
+                        priority: c.priority,
+                        status: _statusToCard(c.status),
+                        onEdit: () {
+                          // TODO: open edit bottom sheet.
+                        },
+                        onDelete: () => _onDelete(context, ref, c),
+                        onVerify: c.isPending
+                            ? () => _onVerify(context, ref, c)
+                            : null,
                       ),
-                    ),
-                  ),
-                ],
-              );
-            }
-
-            return ListView.builder(
-              padding: const EdgeInsets.all(20),
-              itemCount: contacts.length,
-              itemBuilder: (context, index) {
-                final contact = contacts[index];
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 16),
-                  child: ContactCard(
-                    name: contact.name,
-                    phone: contact.phone,
-                    priority: contact.priority,
-                    onEdit: () => _onEdit(context, ref, contact),
-                    onDelete: () => _onDelete(context, ref, contact),
-                  ),
-                );
-              },
-            );
-          },
+                    );
+                  },
+                ),
         ),
       ),
       floatingActionButton: FloatingActionButton(
         heroTag: 'fab_add_contact',
         backgroundColor: const Color(0xFFEEEEEE),
         elevation: 0,
-        onPressed: () => _onAdd(context, ref),
+        onPressed: () {
+          // TODO: open add bottom sheet that calls
+          //   ref.read(contactsMutationsProvider).add(...)
+        },
         child: const Icon(Icons.add, color: Color(0xFF7FCCC4)),
       ),
     );
   }
 
-  // ─── Callbacks: pure intent handlers, no setState anywhere ─────────────
+  // ─── Callbacks ────────────────────────────────────────────────────────
 
-  void _onAdd(BuildContext context, WidgetRef ref) {
-    // Open your add-contact bottom sheet here. On success, the sheet should
-    // call: ref.read(contactsMutationsProvider).add(...)
-    // which internally invalidates contactsProvider → UI refreshes.
-  }
-
-  Future<void> _onEdit(
+  Future<void> _onVerify(
     BuildContext context,
     WidgetRef ref,
     FamilyContact contact,
   ) async {
-    // Open your edit bottom sheet. On save:
-    // await ref.read(contactsMutationsProvider).update(
-    //   id: contact.id!,
-    //   name: newName,
-    //   phone: newPhone,
-    //   priority: newPriority,
-    // );
+    if (contact.id == null) return;
+    await showVerifyContactDialog(
+      context: context,
+      contactId: contact.id!,
+      contactName: contact.name,
+    );
+    // The dialog itself invalidates contactsProvider on success → the
+    // Riverpod graph rebuilds the list automatically.
   }
 
   Future<void> _onDelete(
@@ -167,8 +126,55 @@ class FamilyScreenRiverpod extends ConsumerWidget {
       if (context.mounted) AppToast.success(context, 'Contacto eliminado');
     } catch (e) {
       if (context.mounted) {
-        AppToast.error(context, 'Error al eliminar el contacto: $e');
+        AppToast.error(context, 'Error al eliminar: $e');
       }
     }
   }
+
+  // ─── Helpers ──────────────────────────────────────────────────────────
+
+  ContactCardStatus _statusToCard(ContactVerificationStatus s) {
+    switch (s) {
+      case ContactVerificationStatus.verified:
+        return ContactCardStatus.verified;
+      case ContactVerificationStatus.rejected:
+        return ContactCardStatus.rejected;
+      case ContactVerificationStatus.pending:
+        return ContactCardStatus.pending;
+    }
+  }
+
+  Widget _emptyState(BuildContext context) => ListView(
+    children: [
+      SizedBox(
+        height: MediaQuery.of(context).size.height * 0.7,
+        child: const Center(
+          child: Text(
+            'No se han añadido contactos de emergencia.\n'
+            'Toca + para añadir contactos.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: AppTheme.textLight),
+          ),
+        ),
+      ),
+    ],
+  );
+
+  Widget _errorState(BuildContext context, Object error) => ListView(
+    children: [
+      SizedBox(
+        height: MediaQuery.of(context).size.height * 0.7,
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Text(
+              'No se pudieron cargar los contactos.\n$error',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: AppTheme.textLight),
+            ),
+          ),
+        ),
+      ),
+    ],
+  );
 }

@@ -6,54 +6,52 @@ import '../services/emergency_contacts_service.dart';
 import '../utils/phone_utils.dart';
 import 'api_providers.dart';
 
-/// Immutable view-model of a family member used by the UI layer.
-///
-/// Kept intentionally thin to decouple the widget tree from raw API DTOs.
+/// Immutable view-model for the Family screen.
 class FamilyContact {
   final int? id;
   final String name;
-  final String phone; // E.164 format for display
+  final String phone;
   final int priority;
+  final ContactVerificationStatus status;
+  final DateTime? acceptedAt;
 
   const FamilyContact({
     required this.id,
     required this.name,
     required this.phone,
     required this.priority,
+    required this.status,
+    this.acceptedAt,
   });
+
+  bool get isVerified => status == ContactVerificationStatus.verified;
+  bool get isPending => status == ContactVerificationStatus.pending;
 
   FamilyContact copyWith({
     int? id,
     String? name,
     String? phone,
     int? priority,
+    ContactVerificationStatus? status,
+    DateTime? acceptedAt,
   }) {
     return FamilyContact(
       id: id ?? this.id,
       name: name ?? this.name,
       phone: phone ?? this.phone,
       priority: priority ?? this.priority,
+      status: status ?? this.status,
+      acceptedAt: acceptedAt ?? this.acceptedAt,
     );
   }
 }
 
-/// Exposes the [EmergencyContactsService] wired to the app's [ApiClient].
 final emergencyContactsServiceProvider = Provider<EmergencyContactsService>((
   ref,
 ) {
   return EmergencyContactsService(ref.watch(apiClientProvider));
 });
 
-/// Asynchronous loader for the authenticated user's emergency contacts.
-///
-/// Uses [FutureProvider.autoDispose] so the list is refetched whenever the
-/// FamilyScreen is re-opened (no stale data between sessions), but stays
-/// alive while the screen is mounted.
-///
-/// Invalidate it after a mutation to trigger a refresh:
-/// ```dart
-/// ref.invalidate(contactsProvider);
-/// ```
 final contactsProvider = FutureProvider.autoDispose<List<FamilyContact>>((
   ref,
 ) async {
@@ -70,14 +68,13 @@ final contactsProvider = FutureProvider.autoDispose<List<FamilyContact>>((
               ? ''
               : formatToE164(normalizePhoneForApi(rawPhone)),
           priority: e.prioridad,
+          status: e.estadoVerificacion,
+          acceptedAt: e.acceptedAt,
         );
       })
       .toList(growable: false);
 });
 
-/// Notifier that encapsulates write operations (create / update / delete)
-/// and invalidates [contactsProvider] on success so the UI refreshes without
-/// manual state juggling.
 class ContactsMutations {
   final Ref _ref;
   ContactsMutations(this._ref);
@@ -120,6 +117,18 @@ class ContactsMutations {
   Future<void> remove(int id) async {
     await _service.deleteContact(id);
     _ref.invalidate(contactsProvider);
+  }
+
+  /// Submit the OTP typed by the user. Throws [ApiException] on failure
+  /// so the caller can map 401 → "codigo invalido".
+  Future<void> verify(int contactId, String otp) async {
+    await _service.verifyContact(contactId, otp);
+    _ref.invalidate(contactsProvider);
+  }
+
+  /// Request a new OTP. Throws [ApiException] if cooldown is active.
+  Future<void> resend(int contactId) async {
+    await _service.resendContactCode(contactId);
   }
 }
 
