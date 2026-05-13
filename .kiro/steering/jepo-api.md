@@ -2,7 +2,7 @@
 inclusion: auto
 ---
 
-# JEPO API v1.1.0 — Referencia Rápida
+# JEPO API v1.2.0 — Referencia Rápida
 
 Sistema de Asistencia Proactiva a Personas.
 
@@ -213,7 +213,8 @@ Flujo opt-in: al crearse, el contacto nace en estado `PENDING` y se envía un OT
 | Método | Ruta | Descripción |
 |--------|------|-------------|
 | POST | `/api/usuarios/contactos` | Crear contacto (PENDING + envía OTP) |
-| GET | `/api/usuarios/contactos` | Listar contactos del usuario |
+| GET | `/api/usuarios/contactos` | Listar contactos del usuario (ordenados por prioridad) |
+| PATCH | `/api/usuarios/contactos/reordenar` | Reordenar contactos (bulk update de prioridades) |
 | GET | `/api/usuarios/contactos/{id}` | Obtener contacto por ID |
 | PATCH | `/api/usuarios/contactos/{id}` | Actualizar contacto |
 | DELETE | `/api/usuarios/contactos/{id}` | Eliminar contacto |
@@ -240,6 +241,8 @@ Reglas:
 }
 ```
 
+- `prioridad` es **opcional**. Si no se envía, el contacto se asigna automáticamente al final de la lista (`MAX(prioridad) + 1`).
+
 **Respuesta 201:**
 
 ```json
@@ -262,6 +265,8 @@ Reglas:
 
 ### GET /api/usuarios/contactos
 
+Retorna los contactos **ordenados por `prioridad ASC`** (el orden visual de la lista).
+
 **Respuesta 200:**
 
 ```json
@@ -277,10 +282,55 @@ Reglas:
       "prioridad": 1,
       "estado_verificacion": "VERIFIED",
       "accepted_at": "2026-05-13T14:22:10.000Z"
+    },
+    {
+      "id": 15,
+      "id_usuario": 12123456,
+      "nombre_contacto": "Maria Gomez",
+      "telefono_contacto": "+584121234567",
+      "prioridad": 2,
+      "estado_verificacion": "PENDING",
+      "accepted_at": null
     }
   ]
 }
 ```
+
+### PATCH /api/usuarios/contactos/reordenar
+
+Reordena masivamente los contactos tras un Drag & Drop en el frontend. Envía el array completo con el nuevo orden.
+
+**Body:**
+
+```json
+{
+  "orden": [
+    { "id": 15, "prioridad": 1 },
+    { "id": 10, "prioridad": 2 },
+    { "id": 12, "prioridad": 3 }
+  ]
+}
+```
+
+- `prioridad`: posición en la lista (índice del array + 1).
+- Todos los IDs deben pertenecer al usuario autenticado.
+- Se ejecuta en transacción para consistencia.
+
+**Respuesta 200:**
+
+```json
+{
+  "success": true,
+  "message": "Contactos reordenados",
+  "data": [
+    { "id": 15, "nombre_contacto": "Maria Gomez", "prioridad": 1, "..." : "..." },
+    { "id": 10, "nombre_contacto": "Juan Lopez", "prioridad": 2, "..." : "..." },
+    { "id": 12, "nombre_contacto": "Pedro Ruiz", "prioridad": 3, "..." : "..." }
+  ]
+}
+```
+
+**Errores:** 403 — algún ID no pertenece al usuario autenticado.
 
 ### PATCH /api/usuarios/contactos/{id}
 
@@ -541,8 +591,9 @@ Throttler global a partir de `THROTTLE_LIMIT` / `THROTTLE_TTL` del `.env` (por d
 - **LoginDto**: `email`, `password`
 - **ForgotPasswordDto**: `email_or_phone`, `method` (`"email" | "whatsapp"`)
 - **ResetPasswordDto**: `email_or_phone`, `otp` (6 dígitos), `new_password`
-- **CreateEmergencyContactDto**: `nombre_contacto`, `telefono_contacto`, `prioridad` (1-5)
+- **CreateEmergencyContactDto**: `nombre_contacto`, `telefono_contacto`, `prioridad?` (opcional, 1-5; si no se envía se auto-asigna al final)
 - **UpdateEmergencyContactDto**: `nombre_contacto?`, `telefono_contacto?`, `prioridad?`
+- **ReorderContactsDto**: `orden` (array de `{ id, prioridad }`)
 - **VerifyEmergencyContactDto**: `codigo` (6 dígitos)
 - **CreateIncidentAlertDto**: `latitud`, `longitud`, `url_audio_contexto`, `fecha_hora`, `es_proactiva`
 - **UpdateIncidentAlertDto**: todos opcionales
@@ -555,3 +606,5 @@ Throttler global a partir de `THROTTLE_LIMIT` / `THROTTLE_TTL` del `.env` (por d
 - **Forgot-password**: mostrar mensaje genérico al usuario independientemente de si existe la cuenta. Si el backend devuelve `500`, sugerir reintentar en unos segundos.
 - **Verificación de contacto**: después de crear el contacto, la UI debe mostrar el estado (`PENDING`) y un CTA para ingresar el código. Proveer botón de "Reenviar código" con cooldown visual de 60 s.
 - **Alertas**: si `contactosNotificar` viene vacío, avisar al usuario que no tiene contactos verificados (los PENDING no reciben la alerta).
+- **Drag & Drop de contactos**: al soltar, enviar `PATCH /api/usuarios/contactos/reordenar` con el array `orden` donde `prioridad = index + 1`. La respuesta devuelve la lista completa ya reordenada para sincronizar el estado local. No es necesario enviar `prioridad` al crear un contacto nuevo; siempre cae al final de la lista automáticamente.
+- **Crear contacto sin prioridad**: el frontend puede omitir `prioridad` en el body de `POST /api/usuarios/contactos`. El backend lo coloca al final. Tras crear, hacer un GET o usar la data del response para actualizar la lista local.
