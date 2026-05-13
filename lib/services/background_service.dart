@@ -11,6 +11,7 @@ import 'alert_queue_service.dart';
 import 'api_client.dart';
 import 'alerts_service.dart';
 import 'diagnostic_log_service.dart';
+import 'location_reporter.dart';
 import 'pre_alert_service.dart';
 import 'session_events.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -173,7 +174,9 @@ void onStart(ServiceInstance service) async {
         NotificationDetails(android: details),
         payload: 'pre_alert:$seconds',
       );
-      debugPrint('BackgroundService: Pre-alert fullScreenIntent notification shown');
+      debugPrint(
+        'BackgroundService: Pre-alert fullScreenIntent notification shown',
+      );
     } catch (e) {
       debugPrint('BackgroundService: Error showing pre-alert notification: $e');
     }
@@ -197,8 +200,13 @@ void onStart(ServiceInstance service) async {
     //    This guarantees Android brings the app to the foreground even if the
     //    screen is ON, completely bypassing the Heads-Up Notification limit!
     try {
-      await launchUrl(Uri.parse('jepo://alert'), mode: LaunchMode.externalApplication);
-      debugPrint('BackgroundService: Forced app to foreground via jepo://alert');
+      await launchUrl(
+        Uri.parse('jepo://alert'),
+        mode: LaunchMode.externalApplication,
+      );
+      debugPrint(
+        'BackgroundService: Forced app to foreground via jepo://alert',
+      );
     } catch (e) {
       debugPrint('BackgroundService: URL launch failed: $e');
     }
@@ -214,7 +222,9 @@ void onStart(ServiceInstance service) async {
       return await confirmationCompleter!.future.timeout(
         Duration(seconds: seconds + 25),
         onTimeout: () {
-          debugPrint('BackgroundService: Confirmation timed out, assuming unsafe.');
+          debugPrint(
+            'BackgroundService: Confirmation timed out, assuming unsafe.',
+          );
           return true; // shouldSend = true
         },
       );
@@ -240,12 +250,17 @@ void onStart(ServiceInstance service) async {
     // Load initial threshold
     final prefs = await SharedPreferences.getInstance();
     _impactThreshold = prefs.getDouble(_thresholdKey) ?? 30.0;
+
+    // Start the periodic location reporter (15-min ticks). It is
+    // self-contained and silently no-ops when there is no session.
+    LocationReporter.start();
   } catch (e) {
     debugPrint('Background API init failed: $e');
   }
 
   // Listen for stop command
   service.on('stopService').listen((event) {
+    LocationReporter.stop();
     PreAlertService.clearIncident();
     service.stopSelf();
   });
@@ -355,8 +370,9 @@ void onStart(ServiceInstance service) async {
         if (_isConfirmingMemory) {
           return; // Already waiting for user response
         }
-        if (_lastImpactMemory != null && 
-            now.difference(_lastImpactMemory!) < const Duration(seconds: _impactDebounceSeconds)) {
+        if (_lastImpactMemory != null &&
+            now.difference(_lastImpactMemory!) <
+                const Duration(seconds: _impactDebounceSeconds)) {
           return;
         }
         _lastImpactMemory = now;

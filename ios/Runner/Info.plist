@@ -52,5 +52,19 @@
 	<string>Esta aplicación necesita acceso a la biblioteca de fotos para seleccionar y guardar imágenes.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Esta aplicación necesita permiso para guardar fotos en la biblioteca.</string>
+
+	<!-- Location permissions (foreground + background reporting every 15 min) -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Jepo necesita tu ubicación para compartirla con tus contactos de emergencia cuando abres la app.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Jepo necesita tu ubicación incluso cuando la app está cerrada para alertar a tus contactos en caso de emergencia.</string>
+	<key>NSLocationAlwaysUsageDescription</key>
+	<string>Jepo necesita tu ubicación en segundo plano para alertar a tus contactos en caso de emergencia.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+		<string>location</string>
+		<string>remote-notification</string>
+	</array>
 </dict>
 </plist>

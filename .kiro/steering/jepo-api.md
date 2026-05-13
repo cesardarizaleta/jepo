@@ -547,6 +547,52 @@ Al enviar `password` se actualiza `password_changed_at` en el servidor y **todos
 
 ---
 
+## Mapa / Grafo Familiar
+
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| PATCH | `/api/usuarios/me/ubicacion` | Actualizar ubicación del usuario autenticado |
+| GET | `/api/mapa/monitoreados` | Listar usuarios que me tienen como contacto verificado |
+
+### PATCH /api/usuarios/me/ubicacion
+
+**Body:**
+
+```json
+{ "latitud": 10.50234567, "longitud": -66.91234567 }
+```
+
+**Respuesta 200:** `{ "success": true, "message": "Ubicacion actualizada", "data": null }`
+
+El frontend llama este endpoint cada 15 minutos desde el background service (`LocationReporter`).
+
+### GET /api/mapa/monitoreados
+
+**Respuesta 200:**
+
+```json
+{
+  "success": true,
+  "message": "Usuarios monitoreados obtenidos",
+  "data": [
+    {
+      "id": 5,
+      "nombre": "Maria",
+      "apellido": "Perez",
+      "telefono": "+584121112233",
+      "ultima_latitud": 10.5,
+      "ultima_longitud": -66.9,
+      "fecha_ultima_ubicacion": "2026-05-13T14:22:10.000Z",
+      "tiene_alerta_activa": true
+    }
+  ]
+}
+```
+
+Devuelve únicamente usuarios que tienen al caller registrado como contacto **VERIFIED**.
+
+---
+
 ## Formato de Respuesta Estándar
 
 Todas las respuestas siguen esta estructura:

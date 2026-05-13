@@ -63,13 +63,33 @@ class UsersService {
     return response.data;
   }
 
+  /// Update the current user's last-known GPS location.
+  ///
+  /// Consumed by the background location-reporting loop every 15 minutes.
+  /// The backend persists this in `users.ultima_ubicacion` and exposes it
+  /// through the `/mapa/monitoreados` endpoint to the user's verified
+  /// contacts.
+  Future<void> updateMyLocation({
+    required double latitud,
+    required double longitud,
+  }) async {
+    await api.patchEnvelope(
+      '/api/usuarios/me/ubicacion',
+      body: {'latitud': latitud, 'longitud': longitud},
+      requiresAuth: true,
+    );
+  }
+
   // -----------------------------------------------------------------------
   // Admin/debug CRUD — NOT for regular UI (retained for tooling)
   // -----------------------------------------------------------------------
 
   @Deprecated('Use AuthService.register for user creation in normal flows')
   Future<User?> createUser(CreateUserDto payload) async {
-    final envelope = await api.postEnvelope('/api/usuarios', body: payload.toJson());
+    final envelope = await api.postEnvelope(
+      '/api/usuarios',
+      body: payload.toJson(),
+    );
     final response = ApiResponse<User>.fromJson(
       envelope.raw,
       dataParser: _parseUser,
