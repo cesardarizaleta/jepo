@@ -18,6 +18,7 @@ import 'theme/app_theme.dart';
 import 'widgets/neumorphic_container.dart';
 import 'screens/telemetry_screen.dart';
 import 'screens/family_screen.dart';
+import 'screens/family_map_screen.dart';
 import 'screens/profile_screen.dart';
 import 'services/background_service.dart';
 import 'screens/login_screen.dart';
@@ -532,10 +533,6 @@ class _HomeScreenState extends State<HomeScreen> {
     if (mounted) setState(() => _loadingUser = false);
   }
 
-  void _shareLocation(BuildContext context) {
-    _shareRealLocation(context);
-  }
-
   Future<void> _shareRealLocation(BuildContext context) async {
     try {
       LocationPermission permission = await Geolocator.checkPermission();
@@ -766,9 +763,14 @@ class _HomeScreenState extends State<HomeScreen> {
                       .scale(curve: Curves.easeOutBack),
                   _buildMenuCard(
                         context,
-                        title: 'Compartir Ubicación',
-                        icon: Icons.share_location,
-                        onTap: () => _shareLocation(context),
+                        title: 'Mapa',
+                        icon: Icons.map_outlined,
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const FamilyMapScreen(),
+                          ),
+                        ),
                       )
                       .animate()
                       .fadeIn(delay: 400.ms)
@@ -806,15 +808,21 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 )
               : Icon(icon, size: 40, color: iconColor ?? AppTheme.primary),
-          const SizedBox(height: 16),
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: iconColor ?? AppTheme.textDark,
+          const SizedBox(height: 12),
+          Flexible(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                title,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: iconColor ?? AppTheme.textDark,
+                ),
+                textAlign: TextAlign.center,
+                maxLines: 2,
+              ),
             ),
-            textAlign: TextAlign.center,
           ),
         ],
       ),
