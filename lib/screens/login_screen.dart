@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../main.dart';
+import 'forgot_password_screen.dart';
 import 'register_screen.dart';
 import '../theme/app_theme.dart';
 import '../widgets/neumorphic_container.dart';
@@ -314,7 +315,31 @@ class _LoginScreenState extends State<LoginScreen> {
                   obscureText: true,
                   icon: Icons.lock_outline,
                 ),
-                const SizedBox(height: 40),
+                const SizedBox(height: 12),
+
+                // Forgot Password Link
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: GestureDetector(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const ForgotPasswordScreen(),
+                        ),
+                      );
+                    },
+                    child: const Text(
+                      '¿Olvidaste tu contraseña?',
+                      style: TextStyle(
+                        color: AppTheme.primary,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                ).animate().fadeIn(delay: 600.ms),
+                const SizedBox(height: 28),
 
                 // Login Button
                 NeumorphicButton(
