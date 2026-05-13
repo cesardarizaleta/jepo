@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/auth_provider.dart';
 import '../theme/app_theme.dart';
 import '../utils/app_toast.dart';
+import '../widgets/jepo_phone_input.dart';
 import '../widgets/neumorphic_container.dart';
 
 // ─── Palette ─────────────────────────────────────────────────────────────
@@ -69,7 +70,7 @@ class ForgotPasswordScreen extends ConsumerWidget {
 }
 
 // ═════════════════════════════════════════════════════════════════════════
-//  Step 1 — Request OTP
+//  Step 1 — Request OTP  (method selector → contextual input)
 // ═════════════════════════════════════════════════════════════════════════
 
 class _RequestOtpCard extends ConsumerStatefulWidget {
@@ -80,17 +81,21 @@ class _RequestOtpCard extends ConsumerStatefulWidget {
 }
 
 class _RequestOtpCardState extends ConsumerState<_RequestOtpCard> {
-  final _emailOrPhoneController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _phoneController = TextEditingController();
+  bool _phoneIsValid = false;
 
   @override
   void dispose() {
-    _emailOrPhoneController.dispose();
+    _emailController.dispose();
+    _phoneController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(forgotPasswordControllerProvider);
+    final isEmail = state.method == 'email';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -107,19 +112,12 @@ class _RequestOtpCardState extends ConsumerState<_RequestOtpCard> {
         ),
         const SizedBox(height: 8),
         const Text(
-          'Ingresa tu email o teléfono y te enviaremos un código de verificación.',
+          'Elige cómo quieres recibir tu código de verificación.',
           style: TextStyle(fontSize: 14, color: _textPrimary, height: 1.5),
         ),
         const SizedBox(height: 28),
 
-        _buildLabel('Email o teléfono'),
-        NeumorphicTextField(
-          controller: _emailOrPhoneController,
-          hintText: 'correo@ejemplo.com o 04121112233',
-          icon: Icons.alternate_email,
-        ),
-        const SizedBox(height: 22),
-
+        // ─── 1) Method selector (first) ──────────────────────────────
         _buildLabel('Enviar código vía'),
         Row(
           children: [
@@ -127,7 +125,7 @@ class _RequestOtpCardState extends ConsumerState<_RequestOtpCard> {
               child: _MethodPill(
                 label: 'Email',
                 icon: Icons.email_outlined,
-                selected: state.method == 'email',
+                selected: isEmail,
                 onTap: () => ref
                     .read(forgotPasswordControllerProvider.notifier)
                     .setMethod('email'),
@@ -138,7 +136,7 @@ class _RequestOtpCardState extends ConsumerState<_RequestOtpCard> {
               child: _MethodPill(
                 label: 'WhatsApp',
                 icon: Icons.chat_outlined,
-                selected: state.method == 'whatsapp',
+                selected: !isEmail,
                 onTap: () => ref
                     .read(forgotPasswordControllerProvider.notifier)
                     .setMethod('whatsapp'),
@@ -146,7 +144,51 @@ class _RequestOtpCardState extends ConsumerState<_RequestOtpCard> {
             ),
           ],
         ),
-        const SizedBox(height: 32),
+        const SizedBox(height: 22),
+
+        // ─── 2) Contextual input swaps based on method ───────────────
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 280),
+          switchInCurve: Curves.easeOut,
+          transitionBuilder: (child, animation) => FadeTransition(
+            opacity: animation,
+            child: SizeTransition(
+              sizeFactor: animation,
+              axisAlignment: -1,
+              child: child,
+            ),
+          ),
+          child: isEmail
+              ? Column(
+                  key: const ValueKey('email_input'),
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildLabel('Email'),
+                    NeumorphicTextField(
+                      controller: _emailController,
+                      hintText: 'correo@ejemplo.com',
+                      icon: Icons.alternate_email,
+                      keyboardType: TextInputType.emailAddress,
+                    ),
+                  ],
+                )
+              : Column(
+                  key: const ValueKey('phone_input'),
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    JepoPhoneInput(
+                      controller: _phoneController,
+                      label: 'Teléfono',
+                      onValidityChanged: (valid) {
+                        if (_phoneIsValid != valid) {
+                          setState(() => _phoneIsValid = valid);
+                        }
+                      },
+                    ),
+                  ],
+                ),
+        ),
+        const SizedBox(height: 28),
 
         SizedBox(
           width: double.infinity,
@@ -183,9 +225,28 @@ class _RequestOtpCardState extends ConsumerState<_RequestOtpCard> {
   }
 
   Future<void> _submit() async {
+    final state = ref.read(forgotPasswordControllerProvider);
+    final isEmail = state.method == 'email';
+
+    final String identifier;
+    if (isEmail) {
+      final email = _emailController.text.trim();
+      if (email.isEmpty || !email.contains('@')) {
+        AppToast.warning(context, 'Ingresa un email válido');
+        return;
+      }
+      identifier = email;
+    } else {
+      if (!_phoneIsValid) {
+        AppToast.warning(context, 'Completa el teléfono (7 dígitos)');
+        return;
+      }
+      identifier = _phoneController.text.trim();
+    }
+
     final ok = await ref
         .read(forgotPasswordControllerProvider.notifier)
-        .requestOtp(_emailOrPhoneController.text);
+        .requestOtp(identifier);
     if (ok && mounted) {
       AppToast.success(context, 'Código enviado');
     }
@@ -454,7 +515,6 @@ Widget _buildErrorBox(String message) {
   );
 }
 
-// Method selection pill with neumorphic press state.
 class _MethodPill extends StatelessWidget {
   final String label;
   final IconData icon;
