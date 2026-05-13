@@ -11,19 +11,24 @@ import '../widgets/contact_card.dart';
 import '../widgets/contact_priority_selector.dart';
 import '../widgets/jepo_phone_input.dart';
 import '../widgets/neumorphic_container.dart';
+import '../widgets/verification_dialog.dart';
 
 class _FamilyMember {
   final int? id;
   final String name;
   final String phone;
   final int priority;
+  final ContactVerificationStatus status;
 
   _FamilyMember({
     required this.id,
     required this.name,
     required this.phone,
     required this.priority,
+    required this.status,
   });
+
+  bool get isPending => status == ContactVerificationStatus.pending;
 }
 
 class FamilyScreen extends StatefulWidget {
@@ -73,6 +78,7 @@ class _FamilyScreenState extends State<FamilyScreen> {
                   ? ''
                   : formatToE164(normalizePhoneForApi(rawPhone)),
               priority: e.prioridad,
+              status: e.estadoVerificacion,
             );
           })
           .toList(growable: false);
@@ -104,20 +110,38 @@ class _FamilyScreenState extends State<FamilyScreen> {
     }
   }
 
+  /// Creates the contact. On success, triggers the verification dialog
+  /// automatically for the freshly created contact.
   Future<void> _addContact(String name, String phone, int priority) async {
     if (!_hasSession) return;
 
     try {
       final ecService = EmergencyContactsService(appApi);
-      final payload = CreateEmergencyContactDto(
-        nombreContacto: name,
-        telefonoContacto: phone,
-        prioridad: priority,
+      final created = await ecService.createContact(
+        CreateEmergencyContactDto(
+          nombreContacto: name,
+          telefonoContacto: phone,
+          prioridad: priority,
+        ),
       );
-      await ecService.createContact(payload);
+
       await _loadContacts();
       if (!mounted) return;
-      AppToast.success(context, 'Contacto añadido');
+      AppToast.success(context, 'Contacto añadido. Verifica el código.');
+
+      // ── AUTO-OPEN VERIFICATION DIALOG ──────────────────────────────
+      if (created?.id != null) {
+        // Let the sheet close and the list rebuild before opening the dialog.
+        await Future<void>.delayed(const Duration(milliseconds: 250));
+        if (!mounted) return;
+        await showVerificationDialog(
+          context: context,
+          contactId: created!.id!,
+          contactName: created.nombreContacto,
+        );
+        if (!mounted) return;
+        await _loadContacts(); // reflect VERIFIED/PENDING after the dialog
+      }
     } catch (e) {
       debugPrint('Failed to add contact: $e');
       if (!mounted) return;
@@ -224,6 +248,20 @@ class _FamilyScreenState extends State<FamilyScreen> {
     }
   }
 
+  /// Opens the verification dialog for a specific contact. After the dialog
+  /// closes (whether the contact was verified or not), the list is reloaded
+  /// so the badge updates.
+  Future<void> _showVerifyForMember(_FamilyMember member) async {
+    if (member.id == null) return;
+    await showVerificationDialog(
+      context: context,
+      contactId: member.id!,
+      contactName: member.name,
+    );
+    if (!mounted) return;
+    await _loadContacts();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -279,36 +317,53 @@ class _FamilyScreenState extends State<FamilyScreen> {
                             phone: member.phone,
                             priority: member.priority,
                             isSelected: selected,
+                            status: _mapStatus(member.status),
                             onTap: () {
                               setState(() {
                                 _selectedContactIndex = index;
                               });
                             },
-                            onEdit: () {
-                              _showEditForMember(member);
-                            },
-                            onDelete: () {
-                              _showDeleteForMember(member);
-                            },
+                            onEdit: () => _showEditForMember(member),
+                            onDelete: () => _showDeleteForMember(member),
+                            onVerify: member.isPending
+                                ? () => _showVerifyForMember(member)
+                                : null,
                           ),
                         );
                       },
                     ),
             ),
-      floatingActionButton: FloatingActionButton(
-        heroTag: 'fab_add_contact',
-        backgroundColor: const Color(0xFFEEEEEE),
-        elevation: 0,
-        onPressed: () {
-          if (_familyMembers.length >= 5) {
-            AppToast.warning(context, 'Maximo de 5 contactos permitidos');
-            return;
-          }
-          _showAddContactDialog();
-        },
-        child: const Icon(Icons.add, color: Color(0xFF7FCCC4)),
+      floatingActionButton: Container(
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(color: AppTheme.primary, width: 2),
+        ),
+        child: FloatingActionButton(
+          heroTag: 'fab_add_contact',
+          backgroundColor: const Color(0xFFEEEEEE),
+          elevation: 0,
+          onPressed: () {
+            if (_familyMembers.length >= 5) {
+              AppToast.warning(context, 'Maximo de 5 contactos permitidos');
+              return;
+            }
+            _showAddContactDialog();
+          },
+          child: const Icon(Icons.add, color: AppTheme.primary),
+        ),
       ),
     );
+  }
+
+  ContactCardStatus _mapStatus(ContactVerificationStatus s) {
+    switch (s) {
+      case ContactVerificationStatus.verified:
+        return ContactCardStatus.verified;
+      case ContactVerificationStatus.rejected:
+        return ContactCardStatus.rejected;
+      case ContactVerificationStatus.pending:
+        return ContactCardStatus.pending;
+    }
   }
 }
 

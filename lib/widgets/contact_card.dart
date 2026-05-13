@@ -38,7 +38,6 @@ class ContactCard extends StatelessWidget {
   static const Color _surface = Color(0xFFEEEEEE);
   static const Color _accent = Color(0xFF7FCCC4);
   static const Color _danger = Color(0xFFFF5151);
-  static const Color _warning = Color(0xFFFFB74D);
   static const Color _textPrimary = Color(0xFF747877);
   static const Color _shadowDark = Color(0xFFA3B1C6);
   static const Color _shadowLight = Colors.white;
