@@ -193,6 +193,17 @@ class AuthService {
     // Allow future 401 events to be detected again now that we have a valid session.
     SessionEvents.resetInvalidation();
 
+    // Start background service now that we have a valid session.
+    if (!kIsWeb) {
+      try {
+        final bgService = FlutterBackgroundService();
+        await bgService.startService();
+        debugPrint('AuthService: Background service started after auth.');
+      } catch (e) {
+        debugPrint('AuthService: Failed to start background service: $e');
+      }
+    }
+
     return response;
   }
 

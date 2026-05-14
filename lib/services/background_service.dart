@@ -86,7 +86,7 @@ Future<void> initializeService() async {
   await service.configure(
     androidConfiguration: AndroidConfiguration(
       onStart: onStart,
-      autoStart: true,
+      autoStart: false,
       isForegroundMode: true,
       notificationChannelId: monitoringChannelId, // Default to monitoring
       initialNotificationTitle: 'Jepo Activo',
@@ -94,7 +94,7 @@ Future<void> initializeService() async {
       foregroundServiceNotificationId: monitoringNotificationId,
     ),
     iosConfiguration: IosConfiguration(
-      autoStart: true,
+      autoStart: false,
       onForeground: onStart,
       onBackground: onIosBackground,
     ),
@@ -365,6 +365,20 @@ void onStart(ServiceInstance service) async {
       double magnitude = (event.x.abs() + event.y.abs() + event.z.abs());
 
       if (magnitude > _impactThreshold) {
+        // ─── SESSION GUARD: Skip if user is NOT authenticated ───
+        if (!appApiInitialized) return;
+        try {
+          final token = await appApi.getAccessToken();
+          if (token == null || token.isEmpty) {
+            debugPrint(
+              'BackgroundService: No active session — ignoring impact.',
+            );
+            return;
+          }
+        } catch (_) {
+          return; // Can't verify session → don't fire alarm
+        }
+        // ─── END SESSION GUARD ──────────────────────────────────
         // Fast memory check to strictly prevent async race conditions
         final now = DateTime.now().toUtc();
         if (_isConfirmingMemory) {

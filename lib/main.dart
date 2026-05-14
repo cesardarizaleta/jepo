@@ -62,6 +62,17 @@ Future<void> _initializePlatformServices() async {
   try {
     await _requestStartupPermissions();
     await initializeService();
+
+    // Only start the background service if user already has an active session.
+    // Otherwise it will be started after login/register in AuthService.
+    if (appApiInitialized) {
+      final token = await appApi.getAccessToken();
+      if (token != null && token.isNotEmpty) {
+        final bgService = FlutterBackgroundService();
+        await bgService.startService();
+        debugPrint('Main: Background service started (existing session).');
+      }
+    }
   } catch (e, st) {
     // Never block app bootstrap because of optional background features.
     debugPrint('Startup init failed: $e');
