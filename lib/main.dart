@@ -24,6 +24,7 @@ import 'services/background_service.dart';
 import 'screens/login_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/pre_alert_screen.dart';
+import 'screens/dev_telemetry_screen.dart';
 import 'models/user.dart';
 import 'utils/app_toast.dart';
 import 'dart:async';
@@ -665,11 +666,20 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       backgroundColor: AppTheme.background,
       appBar: AppBar(
-        title: const Text(
-          'JEPO',
-          style: TextStyle(
-            color: AppTheme.textDark,
-            fontWeight: FontWeight.bold,
+        title: GestureDetector(
+          onLongPress: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const DevTelemetryScreen(),
+              ),
+            );
+          },
+          child: const Text(
+            'JEPO',
+            style: TextStyle(
+              color: AppTheme.textDark,
+              fontWeight: FontWeight.bold,
+            ),
           ),
         ),
         backgroundColor: Colors.transparent,
