@@ -2,14 +2,13 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import 'package:sensors_plus/sensors_plus.dart';
 
-/// Hidden developer screen used to record labeled sensor data for ML training.
+/// Hidden developer screen for recording labeled sensor data (ML training).
 ///
-/// Hold a button to start sampling `userAccelerometerEventStream` and
-/// `gyroscopeEventStream`. On release, the buffered samples are POSTed to
-/// the backend along with the label.
+/// Tap a button to START recording. Tap again to STOP and POST the samples.
 class DevTelemetryScreen extends StatefulWidget {
   const DevTelemetryScreen({super.key});
 
@@ -25,10 +24,12 @@ class _DevTelemetryScreenState extends State<DevTelemetryScreen> {
   StreamSubscription<GyroscopeEvent>? _gyroSub;
 
   final List<Map<String, dynamic>> _buffer = [];
-  String? _activeLabel;
+
+  bool isRecording = false;
+  String? currentLabel;
   DateTime? _recordingStartedAt;
   bool _isSending = false;
-  String _statusMsg = 'Listo';
+  String _statusMsg = 'Listo. Toca un botón para iniciar grabación.';
 
   @override
   void dispose() {
@@ -37,15 +38,24 @@ class _DevTelemetryScreenState extends State<DevTelemetryScreen> {
     super.dispose();
   }
 
-  void _startRecording(String label) {
-    if (_activeLabel != null || _isSending) return;
+  void _toggleRecording(String label) {
+    if (_isSending) return;
 
+    if (isRecording && currentLabel == label) {
+      // STOP recording and send
+      _stopAndSend();
+    } else if (!isRecording) {
+      // START recording
+      _startRecording(label);
+    }
+  }
+
+  void _startRecording(String label) {
     _buffer.clear();
-    _activeLabel = label;
+    currentLabel = label;
+    isRecording = true;
     _recordingStartedAt = DateTime.now();
 
-    // Latest gyro reading; merged with each accelerometer sample so each
-    // entry has both signals at the same instant.
     double gx = 0, gy = 0, gz = 0;
 
     _gyroSub = gyroscopeEventStream().listen((GyroscopeEvent e) {
@@ -69,14 +79,14 @@ class _DevTelemetryScreenState extends State<DevTelemetryScreen> {
     });
 
     setState(() {
-      _statusMsg = 'Grabando $label...';
+      _statusMsg = 'Grabando $label... Toque para detener.';
     });
   }
 
   Future<void> _stopAndSend() async {
-    if (_activeLabel == null) return;
+    if (!isRecording || currentLabel == null) return;
 
-    final label = _activeLabel!;
+    final label = currentLabel!;
     final samples = List<Map<String, dynamic>>.from(_buffer);
     final startedAt = _recordingStartedAt;
 
@@ -84,11 +94,15 @@ class _DevTelemetryScreenState extends State<DevTelemetryScreen> {
     await _gyroSub?.cancel();
     _accelSub = null;
     _gyroSub = null;
-    _activeLabel = null;
-    _recordingStartedAt = null;
+
+    setState(() {
+      isRecording = false;
+      currentLabel = null;
+      _recordingStartedAt = null;
+    });
 
     if (samples.isEmpty) {
-      setState(() => _statusMsg = 'Sin muestras, no se envió.');
+      setState(() => _statusMsg = 'Sin muestras capturadas, no se envió.');
       return;
     }
 
@@ -105,30 +119,35 @@ class _DevTelemetryScreenState extends State<DevTelemetryScreen> {
       'muestras': samples,
     });
 
+    // Build headers with API Key from .env
+    final apiKey = dotenv.env['API_KEY'] ?? '';
+    final apiKeyHeader = dotenv.env['API_KEY_HEADER_NAME'] ?? 'x-api-key';
+
+    final headers = <String, String>{
+      'Content-Type': 'application/json',
+      apiKeyHeader: apiKey,
+    };
+
     try {
       final res = await http
-          .post(
-            Uri.parse(_endpoint),
-            headers: {'Content-Type': 'application/json'},
-            body: body,
-          )
+          .post(Uri.parse(_endpoint), headers: headers, body: body)
           .timeout(const Duration(seconds: 20));
 
       if (!mounted) return;
       if (res.statusCode >= 200 && res.statusCode < 300) {
         setState(
           () => _statusMsg =
-              'OK ${res.statusCode} — ${samples.length} muestras enviadas ($label)',
+              '✓ ${res.statusCode} — ${samples.length} muestras enviadas ($label)',
         );
       } else {
         setState(
           () => _statusMsg =
-              'Error ${res.statusCode}: ${res.body.substring(0, res.body.length > 200 ? 200 : res.body.length)}',
+              '✗ Error ${res.statusCode}: ${res.body.length > 200 ? res.body.substring(0, 200) : res.body}',
         );
       }
     } catch (e) {
       if (!mounted) return;
-      setState(() => _statusMsg = 'Fallo red: $e');
+      setState(() => _statusMsg = '✗ Fallo de red: $e');
     } finally {
       if (mounted) setState(() => _isSending = false);
     }
@@ -137,58 +156,85 @@ class _DevTelemetryScreenState extends State<DevTelemetryScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Dev Telemetry')),
+      appBar: AppBar(title: const Text('Dev Telemetry (Oculto)')),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
             children: [
-              Text(
-                _statusMsg,
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 14),
-              ),
-              const SizedBox(height: 8),
-              if (_activeLabel != null)
-                Text(
-                  'Buffer: ${_buffer.length} muestras',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: Colors.blueGrey,
-                  ),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: isRecording
+                      ? Colors.red.shade50
+                      : (_isSending ? Colors.orange.shade50 : Colors.grey.shade100),
+                  borderRadius: BorderRadius.circular(8),
                 ),
-              const SizedBox(height: 16),
+                child: Column(
+                  children: [
+                    Text(
+                      _statusMsg,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: isRecording ? Colors.red.shade800 : Colors.black87,
+                      ),
+                    ),
+                    if (isRecording)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: Text(
+                          'Buffer: ${_buffer.length} muestras',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Colors.blueGrey,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
               Expanded(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
-                    _RecordButton(
+                    _RecordToggleButton(
                       label: 'NORMAL',
                       color: Colors.green,
-                      enabled: !_isSending,
-                      onPressStart: () => _startRecording('NORMAL'),
-                      onPressEnd: _stopAndSend,
+                      isActive: isRecording && currentLabel == 'NORMAL',
+                      enabled: !_isSending && (!isRecording || currentLabel == 'NORMAL'),
+                      onTap: () => _toggleRecording('NORMAL'),
                     ),
-                    _RecordButton(
+                    _RecordToggleButton(
                       label: 'CAMINAR',
                       color: Colors.blue,
-                      enabled: !_isSending,
-                      onPressStart: () => _startRecording('CAMINAR'),
-                      onPressEnd: _stopAndSend,
+                      isActive: isRecording && currentLabel == 'CAMINAR',
+                      enabled: !_isSending && (!isRecording || currentLabel == 'CAMINAR'),
+                      onTap: () => _toggleRecording('CAMINAR'),
                     ),
-                    _RecordButton(
+                    _RecordToggleButton(
+                      label: 'CORRER',
+                      color: Colors.orange,
+                      isActive: isRecording && currentLabel == 'CORRER',
+                      enabled: !_isSending && (!isRecording || currentLabel == 'CORRER'),
+                      onTap: () => _toggleRecording('CORRER'),
+                    ),
+                    _RecordToggleButton(
                       label: 'CAIDA',
                       color: Colors.red,
-                      enabled: !_isSending,
-                      onPressStart: () => _startRecording('CAIDA'),
-                      onPressEnd: _stopAndSend,
+                      isActive: isRecording && currentLabel == 'CAIDA',
+                      enabled: !_isSending && (!isRecording || currentLabel == 'CAIDA'),
+                      onTap: () => _toggleRecording('CAIDA'),
                     ),
                   ],
                 ),
               ),
               const SizedBox(height: 8),
               const Text(
-                'Mantén presionado para grabar. Suelta para enviar.',
+                'Toca para iniciar. Toca de nuevo para detener y enviar.',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 12, color: Colors.grey),
               ),
@@ -200,42 +246,50 @@ class _DevTelemetryScreenState extends State<DevTelemetryScreen> {
   }
 }
 
-class _RecordButton extends StatelessWidget {
+class _RecordToggleButton extends StatelessWidget {
   final String label;
   final Color color;
+  final bool isActive;
   final bool enabled;
-  final VoidCallback onPressStart;
-  final Future<void> Function() onPressEnd;
+  final VoidCallback onTap;
 
-  const _RecordButton({
+  const _RecordToggleButton({
     required this.label,
     required this.color,
+    required this.isActive,
     required this.enabled,
-    required this.onPressStart,
-    required this.onPressEnd,
+    required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTapDown: enabled ? (_) => onPressStart() : null,
-      onTapUp: enabled ? (_) => onPressEnd() : null,
-      onTapCancel: enabled ? () => onPressEnd() : null,
-      child: Container(
+      onTap: enabled ? onTap : null,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
         width: double.infinity,
-        height: 90,
+        height: 80,
         decoration: BoxDecoration(
-          color: enabled ? color : color.withOpacity(0.4),
+          color: enabled
+              ? (isActive ? color : color.withOpacity(0.85))
+              : color.withOpacity(0.3),
           borderRadius: BorderRadius.circular(16),
+          border: isActive
+              ? Border.all(color: Colors.white, width: 3)
+              : null,
+          boxShadow: isActive
+              ? [BoxShadow(color: color.withOpacity(0.5), blurRadius: 12, spreadRadius: 2)]
+              : null,
         ),
         alignment: Alignment.center,
         child: Text(
-          'GRABAR $label',
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 22,
+          isActive ? '⏺ GRABANDO $label — TOCA PARA DETENER' : 'GRABAR $label',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: enabled ? Colors.white : Colors.white54,
+            fontSize: isActive ? 15 : 20,
             fontWeight: FontWeight.bold,
-            letterSpacing: 1.2,
+            letterSpacing: 1.0,
           ),
         ),
       ),
