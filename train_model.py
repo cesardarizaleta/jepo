@@ -94,9 +94,18 @@ def load_datasets(datasets_dir: str) -> pd.DataFrame:
     Cada CSV debe contener las columnas:
         timestamp, ax, ay, az, gx, gy, gz, etiqueta
 
+    Esta función es tolerante a:
+        - Cabeceras con espacios en blanco o nombres inconsistentes.
+        - Archivos sin cabecera explícita.
+        - Valores no numéricos infiltrados en columnas de sensores.
+        - Filas completamente vacías o corruptas.
+
     Returns:
         DataFrame con todas las muestras concatenadas y ordenadas por timestamp.
     """
+    # Nombres canónicos que forzamos en cada CSV.
+    CANONICAL_COLS = ['timestamp', 'ax', 'ay', 'az', 'gx', 'gy', 'gz', 'etiqueta']
+
     csv_files = glob.glob(os.path.join(datasets_dir, '*.csv'))
 
     if not csv_files:
@@ -111,23 +120,71 @@ def load_datasets(datasets_dir: str) -> pd.DataFrame:
 
     frames = []
     for csv_path in csv_files:
-        df = pd.read_csv(csv_path)
+        # Leer sin asumir cabecera; forzar nuestros nombres canónicos.
+        # header=0 descarta la primera fila si contiene texto (cabecera vieja).
+        # Si el archivo NO tiene cabecera, la primera fila de datos se perdería,
+        # así que primero inspeccionamos la primera línea.
+        try:
+            peek = pd.read_csv(csv_path, nrows=1, header=None)
+        except Exception as e:
+            print(f"[WARN] No se pudo leer '{os.path.basename(csv_path)}': {e}")
+            continue
+
+        # Determinar si la primera fila es una cabecera (contiene strings no numéricos
+        # en las columnas que deberían ser numéricas: posiciones 1-6).
+        first_row_is_header = False
+        for col_idx in range(1, min(7, len(peek.columns))):
+            val = str(peek.iloc[0, col_idx]).strip()
+            try:
+                float(val)
+            except (ValueError, TypeError):
+                first_row_is_header = True
+                break
+
+        # Leer el CSV completo con nombres forzados.
+        df = pd.read_csv(
+            csv_path,
+            names=CANONICAL_COLS,
+            header=0 if first_row_is_header else None,
+            skipinitialspace=True,
+        )
+
+        # Si el CSV tiene más o menos columnas de las esperadas, recortar/expandir.
+        for col in CANONICAL_COLS:
+            if col not in df.columns:
+                df[col] = np.nan
+        df = df[CANONICAL_COLS]
+
         frames.append(df)
+        print(f"       ✓ {os.path.basename(csv_path)}: {len(df)} filas")
+
+    if not frames:
+        raise ValueError("Ningún archivo CSV pudo ser leído correctamente.")
 
     combined = pd.concat(frames, ignore_index=True)
 
-    # Eliminar filas con valores nulos en columnas críticas.
-    combined.dropna(subset=FEATURE_COLS + ['etiqueta'], inplace=True)
+    # Forzar conversión numérica en columnas de sensores.
+    # Cualquier valor que no sea parseable se convierte a NaN.
+    for col in FEATURE_COLS:
+        combined[col] = pd.to_numeric(combined[col], errors='coerce')
+
+    # Convertir timestamp a numérico también (milisegundos epoch).
+    combined['timestamp'] = pd.to_numeric(combined['timestamp'], errors='coerce')
+
+    # Eliminar filas donde algún sensor sea NaN (datos corruptos).
+    combined.dropna(subset=FEATURE_COLS, inplace=True)
+
+    # Eliminar filas sin etiqueta.
+    combined = combined[combined['etiqueta'].notna() & (combined['etiqueta'].astype(str).str.strip() != '')]
 
     # Normalizar etiquetas a minúsculas y sin espacios.
     combined['etiqueta'] = combined['etiqueta'].astype(str).str.strip().str.lower()
 
-    # Ordenar por timestamp si existe para mantener coherencia temporal.
-    if 'timestamp' in combined.columns:
-        combined.sort_values('timestamp', inplace=True)
-        combined.reset_index(drop=True, inplace=True)
+    # Ordenar por timestamp para mantener coherencia temporal.
+    combined.sort_values('timestamp', inplace=True)
+    combined.reset_index(drop=True, inplace=True)
 
-    print(f"[INFO] Total de muestras cargadas: {len(combined)}")
+    print(f"\n[INFO] Total de muestras válidas: {len(combined)}")
     print(f"[INFO] Distribución de clases:\n{combined['etiqueta'].value_counts().to_string()}\n")
 
     return combined
