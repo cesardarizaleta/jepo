@@ -28,14 +28,19 @@ class LocationReporter {
   static bool _inFlight = false;
 
   /// Starts the periodic reporter. Calling twice is a no-op.
+  ///
+  /// Fires an immediate location report so the user's position is available
+  /// in the database from second zero (no 15-min wait). The periodic timer
+  /// only begins AFTER the first report completes, ensuring a clean cadence.
   static void start() {
     if (_timer != null) return;
 
-    // Fire one immediate report so the user's location is fresh right
-    // after login, then tick every 15 min.
-    _reportOnce();
-
-    _timer = Timer.periodic(_reportInterval, (_) => _reportOnce());
+    // Fire-and-forget: report immediately, then start the periodic timer.
+    _reportOnce().then((_) {
+      // Guard: stop() may have been called while the first report was in flight.
+      if (_timer != null) return;
+      _timer = Timer.periodic(_reportInterval, (_) => _reportOnce());
+    });
   }
 
   /// Stops the reporter (e.g. on logout).
