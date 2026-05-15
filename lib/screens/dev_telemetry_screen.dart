@@ -17,8 +17,8 @@ class DevTelemetryScreen extends StatefulWidget {
 }
 
 class _DevTelemetryScreenState extends State<DevTelemetryScreen> {
-  static const String _endpoint =
-      'http://172.16.11.43:3000/api/telemetria/recolectar';
+  static String get _endpoint =>
+      '${dotenv.env['BASE_URL']}/api/telemetria/recolectar';
 
   StreamSubscription<UserAccelerometerEvent>? _accelSub;
   StreamSubscription<GyroscopeEvent>? _gyroSub;
