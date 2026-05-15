@@ -74,6 +74,8 @@ FILE_CLASS_MAP = {
     'dataset_normal.csv': 2,
     'dataset_falsospositivos.csv': 2,
     'dataset_normalcaminandocontelefonoenmano.csv': 2,
+    'dataset_sillas.csv': 2,
+    'dataset_escritorio.csv': 2,
 }
 
 # Nombres legibles de las clases (índice → nombre).
@@ -299,20 +301,21 @@ def apply_augmentation(X: np.ndarray, y: np.ndarray, copies: int = 2) -> tuple:
 
 def build_model(n_timesteps: int, n_features: int, n_classes: int) -> keras.Model:
     """
-    Construye el modelo híbrido CNN + Bidirectional LSTM para HAR.
+    Construye un modelo Deep CNN 100% TFLite-Native para HAR.
 
     Flujo:
         Input (n_timesteps, n_features)
         → Conv1D(64, k=3) → BatchNorm → ReLU → MaxPool(2)
         → Conv1D(128, k=3) → BatchNorm → ReLU → MaxPool(2)
-        → Bidirectional(LSTM(64))
+        → Conv1D(256, k=3) → BatchNorm → ReLU
+        → GlobalAveragePooling1D
         → Dense(64, ReLU) → Dropout(0.5)
         → Dense(n_classes, softmax)
 
-    La combinación CNN + Bi-LSTM permite:
-        - CNN: Extraer patrones locales (picos de aceleración, rotaciones bruscas).
-        - Bi-LSTM: Capturar dependencias temporales bidireccionales (la secuencia
-          antes y después del impacto importa para distinguir caída de actividad).
+    GlobalAveragePooling1D reemplaza al LSTM: colapsa la dimensión temporal
+    promediando los feature maps, capturando la distribución global de
+    activaciones sin requerir operaciones recurrentes. Es ligero, rápido
+    y 100% soportado por TFLite builtins.
 
     Args:
         n_timesteps: Longitud de la ventana (50).
@@ -325,20 +328,25 @@ def build_model(n_timesteps: int, n_features: int, n_classes: int) -> keras.Mode
     model = keras.Sequential([
         layers.Input(shape=(n_timesteps, n_features)),
 
-        # ── Bloque CNN 1: Extracción de features espaciales locales ──
+        # ── Bloque CNN 1: Features locales de bajo nivel ──
         layers.Conv1D(filters=64, kernel_size=3, padding='same'),
         layers.BatchNormalization(),
         layers.Activation('relu'),
         layers.MaxPooling1D(pool_size=2),
 
-        # ── Bloque CNN 2: Features de mayor abstracción ──
+        # ── Bloque CNN 2: Features de nivel medio ──
         layers.Conv1D(filters=128, kernel_size=3, padding='same'),
         layers.BatchNormalization(),
         layers.Activation('relu'),
         layers.MaxPooling1D(pool_size=2),
 
-        # ── Bi-LSTM: Dependencias temporales bidireccionales ──
-        layers.Bidirectional(layers.LSTM(64)),
+        # ── Bloque CNN 3: Features de alto nivel ──
+        layers.Conv1D(filters=256, kernel_size=3, padding='same'),
+        layers.BatchNormalization(),
+        layers.Activation('relu'),
+
+        # ── Global Average Pooling: colapsa dimensión temporal ──
+        layers.GlobalAveragePooling1D(),
 
         # ── Clasificador con Dropout agresivo ──
         layers.Dense(64, activation='relu'),
@@ -366,19 +374,14 @@ def build_model(n_timesteps: int, n_features: int, n_classes: int) -> keras.Mode
 
 def export_to_tflite(model: keras.Model, output_path: str) -> None:
     """
-    Convierte el modelo Keras a TFLite con cuantización dinámica de pesos.
-    Usa Select TF Ops para soportar operaciones LSTM que no tienen equivalente
-    nativo en TFLite (tf.TensorListReserve).
+    Convierte el modelo Keras a TFLite usando exclusivamente operaciones
+    nativas (TFLITE_BUILTINS). Aplica cuantización dinámica de pesos.
     """
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
     converter = tf.lite.TFLiteConverter.from_keras_model(model)
     converter.optimizations = [tf.lite.Optimize.DEFAULT]
-    converter.target_spec.supported_ops = [
-        tf.lite.OpsSet.TFLITE_BUILTINS,
-        tf.lite.OpsSet.SELECT_TF_OPS,
-    ]
-    converter._experimental_lower_tensor_list_ops = False
+    converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS]
 
     tflite_model = converter.convert()
 

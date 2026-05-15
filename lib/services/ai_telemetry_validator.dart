@@ -1,20 +1,17 @@
-import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:http/http.dart' as http;
 import 'package:tflite_flutter/tflite_flutter.dart';
 
 /// Validates whether a sequence of sensor readings represents a real fall
-/// using a TensorFlow Lite Conv1D model trained for Human Activity Recognition.
+/// using a TensorFlow Lite Deep CNN model trained for Human Activity Recognition.
 ///
 /// Model input:  [1, 50, 6]  — 50 timesteps × 6 channels (ax, ay, az, gx, gy, gz)
-/// Model output: [1, 3]      — probabilities for [caida, caminar, normal]
+/// Model output: [1, 3]      — probabilities for [caida, actividad, normal]
 ///
 /// Classes:
 ///   0 = caida
-///   1 = caminar
+///   1 = actividad
 ///   2 = normal
 class AiTelemetryValidator {
   static const String _modelAsset = 'assets/models/jepo_model.tflite';
@@ -31,7 +28,7 @@ class AiTelemetryValidator {
   /// Index of the "caida" class in the output tensor.
   static const int fallClassIndex = 0;
 
-  /// Minimum confidence threshold to consider a prediction as a real fall.
+  /// Default minimum confidence threshold to consider a prediction as a real fall.
   static const double defaultConfidenceThreshold = 0.80;
 
   Interpreter? _interpreter;
@@ -63,24 +60,16 @@ class AiTelemetryValidator {
   ///
   /// Returns `true` only if:
   ///   - The predicted class is "caida" (index 0)
-  ///   - The confidence for that class exceeds [confidenceThreshold]
+  ///   - Its confidence exceeds [confidenceThreshold]
+  ///   - No other class has equal or higher confidence
   Future<bool> isRealFall(
     List<Map<String, double>> sensorBuffer, {
     double confidenceThreshold = defaultConfidenceThreshold,
   }) async {
-    if (!_isReady || _interpreter == null) {
-      debugPrint('AiTelemetryValidator: Interpreter not ready, skipping.');
-      return false;
-    }
+    if (!_isReady || _interpreter == null) return false;
+    if (sensorBuffer.length != windowSize) return false;
 
-    if (sensorBuffer.length != windowSize) {
-      debugPrint(
-        'AiTelemetryValidator: Buffer size ${sensorBuffer.length} != $windowSize, skipping.',
-      );
-      return false;
-    }
-
-    // Build input tensor [1, 50, 6] as Float32List.
+    // Build input tensor [1, 50, 6].
     final input = Float32List(1 * windowSize * nFeatures);
     for (int t = 0; t < windowSize; t++) {
       final sample = sensorBuffer[t];
@@ -93,11 +82,12 @@ class AiTelemetryValidator {
       input[offset + 5] = sample['gz'] ?? 0.0;
     }
 
-    // Reshape to [1, 50, 6] for the interpreter.
     final inputTensor = input.reshape([1, windowSize, nFeatures]);
 
     // Output tensor [1, 3].
-    final output = List.filled(1 * nClasses, 0.0).reshape([1, nClasses]);
+    final output = List<List<double>>.generate(
+      1, (_) => List<double>.filled(nClasses, 0.0),
+    );
 
     // Run inference.
     try {
@@ -108,50 +98,15 @@ class AiTelemetryValidator {
     }
 
     // Extract probabilities.
-    final probabilities = (output[0] as List<double>);
+    final probabilities = output[0];
     final fallConfidence = probabilities[fallClassIndex];
 
-    // Find predicted class (argmax).
-    int predictedClass = 0;
-    double maxProb = probabilities[0];
-    for (int i = 1; i < nClasses; i++) {
-      if (probabilities[i] > maxProb) {
-        maxProb = probabilities[i];
-        predictedClass = i;
-      }
-    }
-
-    debugPrint(
-      'AiTelemetryValidator: predictions=[${probabilities.map((p) => p.toStringAsFixed(3)).join(", ")}] '
-      'predicted=$predictedClass fallConf=${fallConfidence.toStringAsFixed(3)}',
-    );
-
-    // ─── DEBUG: Fire-and-forget POST to backend for wireless debugging ───
-    try {
-      final baseUrl = dotenv.env['BASE_URL'] ?? '';
-      final apiKey = dotenv.env['API_KEY'] ?? '';
-      final apiKeyHeader = dotenv.env['API_KEY_HEADER_NAME'] ?? 'x-api-key';
-      if (baseUrl.isNotEmpty) {
-        // ignore: unawaited_futures
-        http.post(
-          Uri.parse('$baseUrl/api/telemetria/debug'),
-          headers: {
-            'Content-Type': 'application/json',
-            apiKeyHeader: apiKey,
-          },
-          body: jsonEncode({
-            'log': '🤖 IA RAW -> Caída: ${(probabilities[0] * 100).toStringAsFixed(1)}% '
-                '| Actividad: ${(probabilities[1] * 100).toStringAsFixed(1)}% '
-                '| Normal: ${(probabilities[2] * 100).toStringAsFixed(1)}% '
-                '| Umbral: $confidenceThreshold',
-          }),
-        ).catchError((_) => http.Response('', 500));
-      }
-    } catch (_) {}
-    // ─── END DEBUG ───────────────────────────────────────────────────────
-
-    // Only confirm fall if class 0 wins AND confidence > threshold.
-    return predictedClass == fallClassIndex && fallConfidence >= confidenceThreshold;
+    // Only confirm fall if class 0 (caída) confidence exceeds threshold
+    // AND no other class has equal or higher probability.
+    if (fallConfidence < confidenceThreshold) return false;
+    if (probabilities[1] >= fallConfidence) return false;
+    if (probabilities[2] >= fallConfidence) return false;
+    return true;
   }
 
   /// Releases interpreter resources.
