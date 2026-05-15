@@ -396,11 +396,6 @@ void onStart(ServiceInstance service) async {
       // Only run inference when we have a full window.
       if (_sensorWindow.length < AiTelemetryValidator.windowSize) return;
 
-      // Quick magnitude pre-filter: skip inference if motion is clearly calm.
-      // This saves battery by avoiding unnecessary TFLite calls.
-      final magnitude = event.x.abs() + event.y.abs() + event.z.abs();
-      if (magnitude < 15.0) return; // Below any reasonable fall threshold
-
       // ─── SESSION GUARD: Skip if user is NOT authenticated ───
       if (!appApiInitialized) return;
       try {
@@ -469,6 +464,7 @@ void onStart(ServiceInstance service) async {
       }
 
       // Notify UI of risk detection.
+      final magnitude = event.x.abs() + event.y.abs() + event.z.abs();
       service.invoke('risk_detected', {
         "type": "AI_FALL_DETECTED",
         "magnitude": magnitude,

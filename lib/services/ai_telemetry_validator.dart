@@ -1,6 +1,9 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:http/http.dart' as http;
 import 'package:tflite_flutter/tflite_flutter.dart';
 
 /// Validates whether a sequence of sensor readings represents a real fall
@@ -122,6 +125,30 @@ class AiTelemetryValidator {
       'AiTelemetryValidator: predictions=[${probabilities.map((p) => p.toStringAsFixed(3)).join(", ")}] '
       'predicted=$predictedClass fallConf=${fallConfidence.toStringAsFixed(3)}',
     );
+
+    // ─── DEBUG: Fire-and-forget POST to backend for wireless debugging ───
+    try {
+      final baseUrl = dotenv.env['BASE_URL'] ?? '';
+      final apiKey = dotenv.env['API_KEY'] ?? '';
+      final apiKeyHeader = dotenv.env['API_KEY_HEADER_NAME'] ?? 'x-api-key';
+      if (baseUrl.isNotEmpty) {
+        // ignore: unawaited_futures
+        http.post(
+          Uri.parse('$baseUrl/api/telemetria/debug'),
+          headers: {
+            'Content-Type': 'application/json',
+            apiKeyHeader: apiKey,
+          },
+          body: jsonEncode({
+            'log': '🤖 IA RAW -> Caída: ${(probabilities[0] * 100).toStringAsFixed(1)}% '
+                '| Actividad: ${(probabilities[1] * 100).toStringAsFixed(1)}% '
+                '| Normal: ${(probabilities[2] * 100).toStringAsFixed(1)}% '
+                '| Umbral: $confidenceThreshold',
+          }),
+        ).catchError((_) => http.Response('', 500));
+      }
+    } catch (_) {}
+    // ─── END DEBUG ───────────────────────────────────────────────────────
 
     // Only confirm fall if class 0 wins AND confidence > threshold.
     return predictedClass == fallClassIndex && fallConfidence >= confidenceThreshold;
