@@ -428,8 +428,21 @@ void onStart(ServiceInstance service) async {
       }
 
       // ─── AI INFERENCE: Run TFLite model on the sliding window ───
+      // Map user sensitivity slider (15.0–60.0) to AI confidence threshold.
+      // Lower slider value = more sensitive = lower confidence required.
+      // Slider 15 → confidence 0.60 | Slider 37.5 → confidence 0.80 | Slider 60 → confidence 0.95
+      double aiConfidence = AiTelemetryValidator.defaultConfidenceThreshold;
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final sensitivity = prefs.getDouble(_thresholdKey) ?? 30.0;
+        // Linear mapping: sensitivity [15..60] → confidence [0.60..0.95]
+        aiConfidence = 0.60 + ((sensitivity - 15.0) / (60.0 - 15.0)) * (0.95 - 0.60);
+        aiConfidence = aiConfidence.clamp(0.60, 0.95);
+      } catch (_) {}
+
       final isRealFall = await aiValidator.isRealFall(
         List<Map<String, double>>.from(_sensorWindow),
+        confidenceThreshold: aiConfidence,
       );
 
       if (!isRealFall) return; // Model says NOT a fall → ignore.

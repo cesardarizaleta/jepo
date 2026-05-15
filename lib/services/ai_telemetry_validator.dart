@@ -29,7 +29,7 @@ class AiTelemetryValidator {
   static const int fallClassIndex = 0;
 
   /// Minimum confidence threshold to consider a prediction as a real fall.
-  static const double confidenceThreshold = 0.80;
+  static const double defaultConfidenceThreshold = 0.80;
 
   Interpreter? _interpreter;
   bool _isReady = false;
@@ -55,10 +55,16 @@ class AiTelemetryValidator {
   /// [sensorBuffer] must contain exactly [windowSize] (50) entries.
   /// Each entry is a map with keys: 'ax', 'ay', 'az', 'gx', 'gy', 'gz'.
   ///
+  /// [confidenceThreshold] controls how strict the detection is. Lower values
+  /// make it more sensitive (more detections), higher values more conservative.
+  ///
   /// Returns `true` only if:
   ///   - The predicted class is "caida" (index 0)
-  ///   - The confidence for that class exceeds [confidenceThreshold] (80%)
-  Future<bool> isRealFall(List<Map<String, double>> sensorBuffer) async {
+  ///   - The confidence for that class exceeds [confidenceThreshold]
+  Future<bool> isRealFall(
+    List<Map<String, double>> sensorBuffer, {
+    double confidenceThreshold = defaultConfidenceThreshold,
+  }) async {
     if (!_isReady || _interpreter == null) {
       debugPrint('AiTelemetryValidator: Interpreter not ready, skipping.');
       return false;
