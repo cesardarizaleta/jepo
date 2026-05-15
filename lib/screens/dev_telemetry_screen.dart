@@ -6,6 +6,8 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import 'package:sensors_plus/sensors_plus.dart';
 
+import '../services/api_client.dart';
+
 /// Hidden developer screen for recording labeled sensor data (ML training).
 ///
 /// Tap a button to START recording. Tap again to STOP and POST the samples.
@@ -119,13 +121,19 @@ class _DevTelemetryScreenState extends State<DevTelemetryScreen> {
       'muestras': samples,
     });
 
-    // Build headers with API Key from .env
+    // Build headers with API Key and JWT token
     final apiKey = dotenv.env['API_KEY'] ?? '';
     final apiKeyHeader = dotenv.env['API_KEY_HEADER_NAME'] ?? 'x-api-key';
+
+    String? token;
+    try {
+      token = await appApi.getAccessToken();
+    } catch (_) {}
 
     final headers = <String, String>{
       'Content-Type': 'application/json',
       apiKeyHeader: apiKey,
+      if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
     };
 
     try {
