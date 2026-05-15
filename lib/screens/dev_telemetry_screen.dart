@@ -198,38 +198,50 @@ class _DevTelemetryScreenState extends State<DevTelemetryScreen> {
               ),
               const SizedBox(height: 24),
               Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    _RecordToggleButton(
-                      label: 'NORMAL',
-                      color: Colors.green,
-                      isActive: isRecording && currentLabel == 'NORMAL',
-                      enabled: !_isSending && (!isRecording || currentLabel == 'NORMAL'),
-                      onTap: () => _toggleRecording('NORMAL'),
-                    ),
-                    _RecordToggleButton(
-                      label: 'CAMINAR',
-                      color: Colors.blue,
-                      isActive: isRecording && currentLabel == 'CAMINAR',
-                      enabled: !_isSending && (!isRecording || currentLabel == 'CAMINAR'),
-                      onTap: () => _toggleRecording('CAMINAR'),
-                    ),
-                    _RecordToggleButton(
-                      label: 'CORRER',
-                      color: Colors.orange,
-                      isActive: isRecording && currentLabel == 'CORRER',
-                      enabled: !_isSending && (!isRecording || currentLabel == 'CORRER'),
-                      onTap: () => _toggleRecording('CORRER'),
-                    ),
-                    _RecordToggleButton(
-                      label: 'CAIDA',
-                      color: Colors.red,
-                      isActive: isRecording && currentLabel == 'CAIDA',
-                      enabled: !_isSending && (!isRecording || currentLabel == 'CAIDA'),
-                      onTap: () => _toggleRecording('CAIDA'),
-                    ),
-                  ],
+                child: SingleChildScrollView(
+                  child: Column(
+                    children: [
+                      _RecordToggleButton(
+                        label: 'NORMAL',
+                        color: Colors.green,
+                        isActive: isRecording && currentLabel == 'NORMAL',
+                        enabled: !_isSending && (!isRecording || currentLabel == 'NORMAL'),
+                        onTap: () => _toggleRecording('NORMAL'),
+                      ),
+                      const SizedBox(height: 12),
+                      _RecordToggleButton(
+                        label: 'CAMINAR',
+                        color: Colors.blue,
+                        isActive: isRecording && currentLabel == 'CAMINAR',
+                        enabled: !_isSending && (!isRecording || currentLabel == 'CAMINAR'),
+                        onTap: () => _toggleRecording('CAMINAR'),
+                      ),
+                      const SizedBox(height: 12),
+                      _RecordToggleButton(
+                        label: 'CORRER',
+                        color: Colors.orange,
+                        isActive: isRecording && currentLabel == 'CORRER',
+                        enabled: !_isSending && (!isRecording || currentLabel == 'CORRER'),
+                        onTap: () => _toggleRecording('CORRER'),
+                      ),
+                      const SizedBox(height: 12),
+                      _RecordToggleButton(
+                        label: 'CAIDA',
+                        color: Colors.red,
+                        isActive: isRecording && currentLabel == 'CAIDA',
+                        enabled: !_isSending && (!isRecording || currentLabel == 'CAIDA'),
+                        onTap: () => _toggleRecording('CAIDA'),
+                      ),
+                      const SizedBox(height: 12),
+                      _RecordToggleButton(
+                        label: 'ESCALERAS',
+                        color: Colors.teal.shade700,
+                        isActive: isRecording && currentLabel == 'ESCALERAS',
+                        enabled: !_isSending && (!isRecording || currentLabel == 'ESCALERAS'),
+                        onTap: () => _toggleRecording('ESCALERAS'),
+                      ),
+                    ],
+                  ),
                 ),
               ),
               const SizedBox(height: 8),
