@@ -1,7 +1,10 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/incident_alert.dart';
@@ -9,8 +12,10 @@ import 'alerts_service.dart';
 import 'api_client.dart';
 import 'auth_service.dart';
 import 'diagnostic_log_service.dart';
+import 'emergency_contacts_cache.dart';
 import 'pre_alert_service.dart';
 import 'session_events.dart';
+import 'sms_fallback_service.dart';
 
 class AlertQueueResult {
   final int sent;
@@ -66,6 +71,27 @@ class AlertQueueService {
   final ApiClient api;
 
   AlertQueueService(this.api);
+
+  bool _isTransientFailure(Object e) {
+    if (e is ApiException) {
+      return e.isTransient;
+    }
+    if (e is TimeoutException) {
+      return true;
+    }
+    if (e is http.ClientException) {
+      return true;
+    }
+    if (e is SocketException) {
+      return true;
+    }
+    final text = e.toString().toLowerCase();
+    return text.contains('socketexception') ||
+        text.contains('failed host lookup') ||
+        text.contains('timed out') ||
+        text.contains('connection refused') ||
+        text.contains('network is unreachable');
+  }
 
   // ---------------------------------------------------------------------------
   // Public API
@@ -140,6 +166,16 @@ class AlertQueueService {
 
       try {
         final result = await AlertsService(api).createAlert(payload);
+        if (kDebugMode) {
+          debugPrint(
+            'AlertQueueService: backend alert sent successfully; SMS fallback not needed.',
+          );
+        }
+        try {
+          await EmergencyContactsCache.replaceVerifiedContacts(
+            result.contactosNotificar,
+          );
+        } catch (_) {}
         final now = DateTime.now().toUtc();
         await _writeLastSent(now);
 
@@ -161,7 +197,26 @@ class AlertQueueService {
         DiagnosticLogService.logAlertSent(eventId: payload.clientEventId);
         return true;
       } catch (e) {
+        final isTransient = _isTransientFailure(e);
+        if (isTransient) {
+          if (kDebugMode) {
+            debugPrint(
+              'AlertQueueService: backend failed with transient error, invoking SMS fallback: $e',
+            );
+          }
+          try {
+            await SmsFallbackService().trySendFallbackSms(payload);
+          } catch (smsError) {
+            debugPrint('AlertQueueService: SMS fallback failed: $smsError');
+          }
+        } else if (kDebugMode) {
+          debugPrint(
+            'AlertQueueService: backend failed with non-transient error, SMS fallback skipped: $e',
+          );
+        }
+
         if (e is ApiException &&
+            !e.isTransient &&
             e.statusCode >= 400 &&
             e.statusCode < 500 &&
             e.statusCode != 429) {
@@ -279,7 +334,32 @@ class AlertQueueService {
           }
           break; // 1 send per cycle
         } catch (e) {
+          final isTransient = _isTransientFailure(e);
+          if (isTransient) {
+            if (kDebugMode) {
+              debugPrint(
+                'AlertQueueService: queued item failed transiently, invoking SMS fallback: $e',
+              );
+            }
+            try {
+              final item = jsonDecode(encoded) as Map<String, dynamic>;
+              final payload = CreateIncidentAlertDto.fromJson(
+                (item['payload'] as Map).cast<String, dynamic>(),
+              );
+              await SmsFallbackService().trySendFallbackSms(payload);
+            } catch (smsError) {
+              debugPrint(
+                'AlertQueueService: SMS fallback failed while processing queue: $smsError',
+              );
+            }
+          } else if (kDebugMode) {
+            debugPrint(
+              'AlertQueueService: queued item failed with non-transient error, SMS fallback skipped: $e',
+            );
+          }
+
           if (e is ApiException &&
+              !e.isTransient &&
               e.statusCode >= 400 &&
               e.statusCode < 500 &&
               e.statusCode != 429) {

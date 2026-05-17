@@ -46,7 +46,8 @@ class DiagnosticEntry {
 
   factory DiagnosticEntry.fromJson(Map<String, dynamic> json) {
     return DiagnosticEntry(
-      timestamp: DateTime.tryParse(json['ts']?.toString() ?? '')?.toUtc() ??
+      timestamp:
+          DateTime.tryParse(json['ts']?.toString() ?? '')?.toUtc() ??
           DateTime.now().toUtc(),
       category: json['cat']?.toString() ?? 'unknown',
       event: json['evt']?.toString() ?? 'unknown',
@@ -139,32 +140,29 @@ class DiagnosticLogService {
   static Future<void> logAlertSent({String? eventId}) =>
       log(category: 'queue', event: 'alert_sent', eventId: eventId);
 
-  static Future<void> logAlertQueued({String? eventId, String? reason}) =>
-      log(
-        category: 'queue',
-        event: 'alert_queued',
-        detail: reason,
-        eventId: eventId,
-      );
+  static Future<void> logAlertQueued({String? eventId, String? reason}) => log(
+    category: 'queue',
+    event: 'alert_queued',
+    detail: reason,
+    eventId: eventId,
+  );
 
-  static Future<void> logAlertDropped({String? eventId, String? reason}) =>
-      log(
-        category: 'queue',
-        event: 'alert_dropped',
-        detail: reason,
-        eventId: eventId,
-        severity: 'warning',
-      );
+  static Future<void> logAlertDropped({String? eventId, String? reason}) => log(
+    category: 'queue',
+    event: 'alert_dropped',
+    detail: reason,
+    eventId: eventId,
+    severity: 'warning',
+  );
 
   static Future<void> logQueueProcessed({
     required int sent,
     required int remaining,
-  }) =>
-      log(
-        category: 'queue',
-        event: 'queue_processed',
-        detail: 'sent=$sent remaining=$remaining',
-      );
+  }) => log(
+    category: 'queue',
+    event: 'queue_processed',
+    detail: 'sent=$sent remaining=$remaining',
+  );
 
   static Future<void> logSessionExpired() =>
       log(category: 'session', event: 'session_expired', severity: 'warning');
@@ -175,33 +173,53 @@ class DiagnosticLogService {
   static Future<void> logSessionLogin() =>
       log(category: 'session', event: 'login');
 
-  static Future<void> logIncidentCreated({required int alertId, String? eventId}) =>
-      log(
-        category: 'incident',
-        event: 'incident_created',
-        detail: 'alertId=$alertId',
-        eventId: eventId,
-      );
+  static Future<void> logIncidentCreated({
+    required int alertId,
+    String? eventId,
+  }) => log(
+    category: 'incident',
+    event: 'incident_created',
+    detail: 'alertId=$alertId',
+    eventId: eventId,
+  );
 
   static Future<void> logIncidentHeartbeat({required int alertId}) =>
-      log(
-        category: 'incident',
-        event: 'heartbeat',
-        detail: 'alertId=$alertId',
-      );
+      log(category: 'incident', event: 'heartbeat', detail: 'alertId=$alertId');
 
   static Future<void> logApiError({
     required int statusCode,
     required String message,
     String? path,
-  }) =>
-      log(
-        category: 'api',
-        event: 'error',
-        detail: '$statusCode $message${path != null ? ' [$path]' : ''}',
-        severity: statusCode >= 500 ? 'error' : 'warning',
-      );
+  }) => log(
+    category: 'api',
+    event: 'error',
+    detail: '$statusCode $message${path != null ? ' [$path]' : ''}',
+    severity: statusCode >= 500 ? 'error' : 'warning',
+  );
 
   static Future<void> logBackgroundEvent(String event, {String? detail}) =>
       log(category: 'background', event: event, detail: detail);
+
+  static Future<void> logSmsSent({String? eventId, required int recipients}) =>
+      log(
+        category: 'sms',
+        event: 'sms_sent',
+        detail: 'recipients=$recipients',
+        eventId: eventId,
+      );
+
+  static Future<void> logSmsFailed({String? eventId, String? reason}) => log(
+    category: 'sms',
+    event: 'sms_failed',
+    detail: reason,
+    eventId: eventId,
+    severity: 'warning',
+  );
+
+  static Future<void> logSmsSkipped({String? eventId, String? reason}) => log(
+    category: 'sms',
+    event: 'sms_skipped',
+    detail: reason,
+    eventId: eventId,
+  );
 }

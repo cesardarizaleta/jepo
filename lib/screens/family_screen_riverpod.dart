@@ -9,12 +9,35 @@ import '../widgets/contact_card.dart';
 import '../widgets/verify_contact_dialog.dart';
 
 /// Family screen powered entirely by Riverpod — no setState anywhere.
-class FamilyScreenRiverpod extends ConsumerWidget {
+class FamilyScreenRiverpod extends ConsumerStatefulWidget {
   const FamilyScreenRiverpod({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<FamilyScreenRiverpod> createState() =>
+      _FamilyScreenRiverpodState();
+}
+
+class _FamilyScreenRiverpodState extends ConsumerState<FamilyScreenRiverpod> {
+  bool _didInitialBuild = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final isCurrent = ModalRoute.of(context)?.isCurrent ?? false;
+      if (isCurrent && _didInitialBuild && mounted) {
+        // Force a reload when the route becomes visible so cache updates.
+        ref.invalidate(contactsProvider);
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final contactsAsync = ref.watch(contactsProvider);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _didInitialBuild = true;
+    });
 
     return Scaffold(
       backgroundColor: AppTheme.background,
