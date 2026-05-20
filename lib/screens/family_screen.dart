@@ -41,11 +41,25 @@ class _FamilyScreenState extends State<FamilyScreen> {
   List<_FamilyMember> _familyMembers = <_FamilyMember>[];
   bool _isLoading = true;
   bool _hasSession = false;
+  bool _firstLoadDone = false;
 
   @override
   void initState() {
     super.initState();
     _loadContacts();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final isCurrent = ModalRoute.of(context)?.isCurrent ?? false;
+      if (isCurrent && _firstLoadDone && mounted) {
+        // Re-load contacts when the route becomes visible again so the
+        // verified-contacts cache is refreshed automatically.
+        _loadContacts();
+      }
+    });
   }
 
   Future<void> _loadContacts() async {
@@ -85,6 +99,7 @@ class _FamilyScreenState extends State<FamilyScreen> {
         _familyMembers = mapped;
         _isLoading = false;
       });
+      _firstLoadDone = true;
     } catch (e) {
       debugPrint('Failed to load contacts: $e');
       if (!mounted) return;
@@ -97,6 +112,7 @@ class _FamilyScreenState extends State<FamilyScreen> {
       }
       AppToast.error(context, msg);
       setState(() => _isLoading = false);
+      _firstLoadDone = true;
     }
   }
 

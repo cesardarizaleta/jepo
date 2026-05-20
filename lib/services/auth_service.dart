@@ -8,6 +8,7 @@ import '../models/api_response.dart';
 import '../models/auth_models.dart';
 import '../models/user.dart';
 import 'api_client.dart';
+import 'emergency_contacts_service.dart';
 import 'session_events.dart';
 import '../utils/phone_utils.dart';
 
@@ -192,6 +193,12 @@ class AuthService {
 
     // Allow future 401 events to be detected again now that we have a valid session.
     SessionEvents.resetInvalidation();
+
+    // Best-effort: seed the verified contacts cache right after auth so SMS
+    // fallback can work even if the Family screen never opens.
+    try {
+      await EmergencyContactsService(api).listContacts();
+    } catch (_) {}
 
     // Start background service now that we have a valid session.
     if (!kIsWeb) {

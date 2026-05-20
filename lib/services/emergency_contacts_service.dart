@@ -1,6 +1,7 @@
 import 'api_client.dart';
 import '../models/api_response.dart';
 import '../models/emergency_contact.dart';
+import 'emergency_contacts_cache.dart';
 
 class EmergencyContactsService {
   final ApiClient api;
@@ -8,25 +9,32 @@ class EmergencyContactsService {
   EmergencyContactsService(this.api);
 
   Future<List<EmergencyContact>> listContacts() async {
-    final envelope = await api.getEnvelope(
-      '/api/usuarios/contactos',
-      requiresAuth: true,
-    );
-    final response = ApiResponse<List<EmergencyContact>>.fromJson(
-      envelope.raw,
-      dataParser: (value) {
-        if (value is! List) return const <EmergencyContact>[];
-        return value
-            .whereType<Map>()
-            .map((e) => EmergencyContact.fromJson(e.cast<String, dynamic>()))
-            .toList(growable: false);
-      },
-    );
+    try {
+      final envelope = await api.getEnvelope(
+        '/api/usuarios/contactos',
+        requiresAuth: true,
+      );
+      final response = ApiResponse<List<EmergencyContact>>.fromJson(
+        envelope.raw,
+        dataParser: (value) {
+          if (value is! List) return const <EmergencyContact>[];
+          return value
+              .whereType<Map>()
+              .map((e) => EmergencyContact.fromJson(e.cast<String, dynamic>()))
+              .toList(growable: false);
+        },
+      );
 
-    final contacts = response.data ?? const <EmergencyContact>[];
-    final sorted = contacts.toList(growable: false)
-      ..sort((a, b) => a.prioridad.compareTo(b.prioridad));
-    return sorted;
+      final contacts = response.data ?? const <EmergencyContact>[];
+      final sorted = contacts.toList(growable: false)
+        ..sort((a, b) => a.prioridad.compareTo(b.prioridad));
+      try {
+        await EmergencyContactsCache.replaceVerifiedContacts(sorted);
+      } catch (_) {}
+      return sorted;
+    } catch (_) {
+      return EmergencyContactsCache.getVerifiedContacts();
+    }
   }
 
   Future<EmergencyContact?> createContact(
@@ -49,7 +57,13 @@ class EmergencyContactsService {
         return null;
       },
     );
-    return response.data;
+    final created = response.data;
+    if (created != null) {
+      try {
+        await EmergencyContactsCache.upsertContact(created);
+      } catch (_) {}
+    }
+    return created;
   }
 
   Future<EmergencyContact?> getContact(int id) async {
@@ -93,11 +107,20 @@ class EmergencyContactsService {
         return null;
       },
     );
-    return response.data;
+    final updated = response.data;
+    if (updated != null) {
+      try {
+        await EmergencyContactsCache.upsertContact(updated);
+      } catch (_) {}
+    }
+    return updated;
   }
 
   Future<void> deleteContact(int id) async {
     await api.delete('/api/usuarios/contactos/$id', requiresAuth: true);
+    try {
+      await EmergencyContactsCache.removeContact(id);
+    } catch (_) {}
   }
 
   /// Verify the contact by consuming the 6-digit OTP it received via
@@ -123,7 +146,13 @@ class EmergencyContactsService {
         return null;
       },
     );
-    return response.data;
+    final verified = response.data;
+    if (verified != null) {
+      try {
+        await EmergencyContactsCache.upsertContact(verified);
+      } catch (_) {}
+    }
+    return verified;
   }
 
   /// Invalidate the current OTP and request a new one for the given

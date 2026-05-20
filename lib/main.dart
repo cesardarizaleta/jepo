@@ -9,6 +9,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'services/api_client.dart';
 import 'services/alert_queue_service.dart';
 import 'services/auth_service.dart';
+import 'services/emergency_contacts_service.dart';
 import 'services/session_events.dart';
 import 'services/pre_alert_service.dart';
 import 'package:share_plus/share_plus.dart';
@@ -72,6 +73,12 @@ Future<void> _initializePlatformServices() async {
         final bgService = FlutterBackgroundService();
         await bgService.startService();
         debugPrint('Main: Background service started (existing session).');
+
+        // Best-effort: seed verified contacts cache so SMS fallback works
+        // even before the user opens the Family screen.
+        try {
+          await EmergencyContactsService(appApi).listContacts();
+        } catch (_) {}
       }
     }
   } catch (e, st) {
@@ -87,6 +94,9 @@ Future<void> _requestStartupPermissions() async {
 
   // 2. Request Phone Call Permission
   await Permission.phone.request();
+
+  // 2b. Request SMS Permission (Android fallback alerts)
+  await Permission.sms.request();
 
   // 3. Request Location Permissions in order
   // Android requires "When In Use" before "Always"
@@ -669,9 +679,7 @@ class _HomeScreenState extends State<HomeScreen> {
         title: GestureDetector(
           onLongPress: () {
             Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => const DevTelemetryScreen(),
-              ),
+              MaterialPageRoute(builder: (_) => const DevTelemetryScreen()),
             );
           },
           child: const Text(
