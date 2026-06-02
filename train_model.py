@@ -70,10 +70,12 @@ DATASETS_DIR = os.path.join(PROJECT_ROOT, 'datasets', 'datasets_15-05-2026')
 FILE_CLASS_MAP = {
     'dataset_caida.csv': 0,
     'dataset_escaleras.csv': 1,
+    'dataset-escaleras-17-1778907954603.csv': 1,
     'dataset_caminaryescaleras.csv': 1,
     'dataset_normal.csv': 2,
     'dataset_falsospositivos.csv': 2,
     'dataset_normalcaminandocontelefonoenmano.csv': 2,
+    'dataset-normal-17-1780416462613.csv': 2,
     'dataset_sillas.csv': 2,
     'dataset_escritorio.csv': 2,
 }
