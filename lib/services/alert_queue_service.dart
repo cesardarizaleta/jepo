@@ -446,6 +446,12 @@ class AlertQueueService {
     return prefs.getInt(_activeIncidentIdKey);
   }
 
+  Future<void> clearActiveIncident() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_activeIncidentIdKey);
+    await prefs.remove(_incidentStartKey);
+  }
+
   // ---------------------------------------------------------------------------
   // Internals
   // ---------------------------------------------------------------------------

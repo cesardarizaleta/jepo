@@ -25,6 +25,7 @@ import 'services/background_service.dart';
 import 'screens/login_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/pre_alert_screen.dart';
+import 'screens/alert_detail_screen.dart';
 import 'screens/dev_telemetry_screen.dart';
 import 'models/user.dart';
 import 'utils/app_toast.dart';
@@ -312,6 +313,18 @@ class _SessionGateState extends State<SessionGate> with WidgetsBindingObserver {
               notifyBackgroundService: true,
             );
           });
+        } else if (payload.startsWith('alert:')) {
+          final idStr = payload.split(':').last;
+          final alertId = int.tryParse(idStr);
+          WidgetsBinding.instance.addPostFrameCallback((_) async {
+            await _awaitUiReady(const Duration(seconds: 3));
+            if (!mounted) return;
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => AlertDetailScreen(alertId: alertId),
+              ),
+            );
+          });
         }
       }
     });
@@ -330,6 +343,15 @@ class _SessionGateState extends State<SessionGate> with WidgetsBindingObserver {
           await _presentPreAlert(
             seconds: seconds,
             notifyBackgroundService: true,
+          );
+        } else if (payload.startsWith('alert:')) {
+          final idStr = payload.split(':').last;
+          final alertId = int.tryParse(idStr);
+          if (!mounted) return;
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => AlertDetailScreen(alertId: alertId),
+            ),
           );
         }
       },
