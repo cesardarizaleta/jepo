@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../services/api_client.dart';
 import '../services/auth_service.dart';
 import 'api_providers.dart';
 
@@ -73,7 +74,10 @@ class ForgotPasswordController extends StateNotifier<ForgotPasswordState> {
       );
       return true;
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: e.toString());
+      state = state.copyWith(
+        isLoading: false,
+        error: _formatError(e, fallback: 'No se pudo enviar el código'),
+      );
       return false;
     }
   }
@@ -86,8 +90,9 @@ class ForgotPasswordController extends StateNotifier<ForgotPasswordState> {
       state = state.copyWith(error: 'El codigo debe tener 6 digitos');
       return false;
     }
-    if (newPassword.length < 8) {
-      state = state.copyWith(error: 'Minimo 8 caracteres');
+    final passwordError = _passwordRulesError(newPassword);
+    if (passwordError != null) {
+      state = state.copyWith(error: passwordError);
       return false;
     }
     state = state.copyWith(isLoading: true, clearError: true);
@@ -102,7 +107,13 @@ class ForgotPasswordController extends StateNotifier<ForgotPasswordState> {
       state = state.copyWith(step: ForgotPasswordStep.done, isLoading: false);
       return true;
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: e.toString());
+      state = state.copyWith(
+        isLoading: false,
+        error: _formatError(
+          e,
+          fallback: 'No se pudo restablecer la contraseña',
+        ),
+      );
       return false;
     }
   }
@@ -112,6 +123,27 @@ class ForgotPasswordController extends StateNotifier<ForgotPasswordState> {
       step: ForgotPasswordStep.requestOtp,
       clearError: true,
     );
+  }
+
+  String? _passwordRulesError(String password) {
+    if (password.length < 8) {
+      return 'La contraseña debe tener al menos 8 caracteres';
+    }
+    if (!RegExp(r'[A-Z]').hasMatch(password) ||
+        !RegExp(r'\d').hasMatch(password)) {
+      return 'La contraseña debe tener al menos 1 mayúscula y 1 número';
+    }
+    return null;
+  }
+
+  String _formatError(Object e, {required String fallback}) {
+    if (e is ApiException) {
+      if (e.errors.isNotEmpty) {
+        return e.errors.join('\n');
+      }
+      return e.message;
+    }
+    return fallback;
   }
 }
 

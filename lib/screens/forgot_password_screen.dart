@@ -324,6 +324,11 @@ class _ConfirmOtpCardState extends ConsumerState<_ConfirmOtpCard> {
           icon: Icons.lock_outline,
           obscureText: true,
         ),
+        const SizedBox(height: 8),
+        const Text(
+          'Debe tener al menos 1 mayúscula y 1 número.',
+          style: TextStyle(fontSize: 12, color: _textPrimary, height: 1.3),
+        ),
         const SizedBox(height: 18),
 
         _buildLabel('Confirmar nueva contraseña'),
