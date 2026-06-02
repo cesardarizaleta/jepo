@@ -25,7 +25,6 @@ const String monitoringChannelId = 'jepo_monitoring';
 const String alertChannelId = 'jepo_alerts_v2';
 const int monitoringNotificationId = 888;
 const int alertNotificationId = 999;
-const int alertDetailNotificationId = 998;
 
 /// Heartbeat interval for location updates during an active incident.
 const Duration _heartbeatInterval = Duration(seconds: 30);
@@ -367,35 +366,35 @@ void onStart(ServiceInstance service) async {
 
   // Sliding window buffer: accumulates sensor readings for inference.
   // Each entry: {'ax': ..., 'ay': ..., 'az': ..., 'gx': ..., 'gy': ..., 'gz': ...}
-  final List<Map<String, double>> sensorWindow = [];
-  double latestGx = 0, latestGy = 0, latestGz = 0;
+  final List<Map<String, double>> _sensorWindow = [];
+  double _latestGx = 0, _latestGy = 0, _latestGz = 0;
 
   // Subscribe to gyroscope to keep latest reading available.
   gyroscopeEventStream().listen((GyroscopeEvent gEvent) {
-    latestGx = gEvent.x;
-    latestGy = gEvent.y;
-    latestGz = gEvent.z;
+    _latestGx = gEvent.x;
+    _latestGy = gEvent.y;
+    _latestGz = gEvent.z;
   });
 
   accelerometerEventStream().listen(
     (AccelerometerEvent event) async {
       // Accumulate sample into sliding window.
-      sensorWindow.add({
+      _sensorWindow.add({
         'ax': event.x,
         'ay': event.y,
         'az': event.z,
-        'gx': latestGx,
-        'gy': latestGy,
-        'gz': latestGz,
+        'gx': _latestGx,
+        'gy': _latestGy,
+        'gz': _latestGz,
       });
 
       // Keep only the latest WINDOW_SIZE samples (sliding window).
-      if (sensorWindow.length > AiTelemetryValidator.windowSize) {
-        sensorWindow.removeAt(0);
+      if (_sensorWindow.length > AiTelemetryValidator.windowSize) {
+        _sensorWindow.removeAt(0);
       }
 
       // Only run inference when we have a full window.
-      if (sensorWindow.length < AiTelemetryValidator.windowSize) return;
+      if (_sensorWindow.length < AiTelemetryValidator.windowSize) return;
 
       // Pre-filter: skip inference if motion is calm (saves battery).
       final magnitude = event.x.abs() + event.y.abs() + event.z.abs();
@@ -406,7 +405,9 @@ void onStart(ServiceInstance service) async {
       try {
         final token = await appApi.getAccessToken();
         if (token == null || token.isEmpty) {
-          debugPrint('BackgroundService: No active session — ignoring impact.');
+          debugPrint(
+            'BackgroundService: No active session — ignoring impact.',
+          );
           return;
         }
       } catch (_) {
@@ -434,13 +435,12 @@ void onStart(ServiceInstance service) async {
         final prefs = await SharedPreferences.getInstance();
         final sensitivity = prefs.getDouble(_thresholdKey) ?? 30.0;
         // Linear mapping: sensitivity [15..60] → confidence [0.60..0.95]
-        aiConfidence =
-            0.60 + ((sensitivity - 15.0) / (60.0 - 15.0)) * (0.95 - 0.60);
+        aiConfidence = 0.60 + ((sensitivity - 15.0) / (60.0 - 15.0)) * (0.95 - 0.60);
         aiConfidence = aiConfidence.clamp(0.60, 0.95);
       } catch (_) {}
 
       final isRealFall = await aiValidator.isRealFall(
-        List<Map<String, double>>.from(sensorWindow),
+        List<Map<String, double>>.from(_sensorWindow),
         confidenceThreshold: aiConfidence,
       );
 
@@ -517,7 +517,9 @@ void onStart(ServiceInstance service) async {
         'BackgroundService: Confirmation result: shouldSend=$shouldSend',
       );
       if (!shouldSend) {
-        debugPrint('BackgroundService: User confirmed safe, alert cancelled.');
+        debugPrint(
+          'BackgroundService: User confirmed safe, alert cancelled.',
+        );
         // Remove the critical notification if user confirmed safe
         await flutterLocalNotificationsPlugin.cancel(alertNotificationId);
         return;
@@ -544,10 +546,6 @@ void onStart(ServiceInstance service) async {
           final incId = await AlertQueueService(appApi).activeIncidentId;
           if (incId != null) {
             PreAlertService.activateIncident(incId);
-            _showAlertDetailNotification(
-              flutterLocalNotificationsPlugin,
-              incId,
-            );
           }
         }
       } catch (e) {
@@ -663,36 +661,5 @@ void _showCriticalNotification(FlutterLocalNotificationsPlugin plugin) {
     );
   } catch (e) {
     debugPrint("Error showing alert notification: $e");
-  }
-}
-
-void _showAlertDetailNotification(
-  FlutterLocalNotificationsPlugin plugin,
-  int alertId,
-) {
-  try {
-    plugin.show(
-      alertDetailNotificationId,
-      'ALERTA ACTIVA',
-      'Toca para confirmar que estas bien y cancelar la alerta.',
-      const NotificationDetails(
-        android: AndroidNotificationDetails(
-          alertChannelId,
-          'Alertas de Jepo',
-          importance: Importance.max,
-          priority: Priority.max,
-          ongoing: false,
-          autoCancel: true,
-          category: AndroidNotificationCategory.alarm,
-          visibility: NotificationVisibility.public,
-          icon: '@mipmap/ic_launcher',
-          color: Colors.red,
-          enableVibration: true,
-        ),
-      ),
-      payload: 'alert:$alertId',
-    );
-  } catch (e) {
-    debugPrint('Error showing alert detail notification: $e');
   }
 }

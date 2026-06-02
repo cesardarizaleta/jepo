@@ -60,10 +60,7 @@ class AlertsService {
   }
 
   Future<IncidentAlert?> getAlert(int id) async {
-    final envelope = await api.getEnvelope(
-      '/api/alertas/$id',
-      requiresAuth: true,
-    );
+    final envelope = await api.getEnvelope('/api/alertas/$id', requiresAuth: true);
     final response = ApiResponse<IncidentAlert>.fromJson(
       envelope.raw,
       dataParser: (value) {
@@ -79,10 +76,7 @@ class AlertsService {
     return response.data;
   }
 
-  Future<IncidentAlert?> updateAlert(
-    int id,
-    UpdateIncidentAlertDto payload,
-  ) async {
+  Future<IncidentAlert?> updateAlert(int id, UpdateIncidentAlertDto payload) async {
     final envelope = await api.patchEnvelope(
       '/api/alertas/$id',
       body: payload.toJson(),
@@ -105,9 +99,5 @@ class AlertsService {
 
   Future<void> deleteAlert(int id) async {
     await api.deleteEnvelope('/api/alertas/$id', requiresAuth: true);
-  }
-
-  Future<void> resolveAlert(int id) async {
-    await api.postEnvelope('/api/alertas/$id/resolver', requiresAuth: true);
   }
 }
