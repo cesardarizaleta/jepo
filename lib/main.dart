@@ -9,6 +9,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'services/api_client.dart';
 import 'services/alert_queue_service.dart';
 import 'services/auth_service.dart';
+import 'services/emergency_contacts_service.dart';
 import 'services/session_events.dart';
 import 'services/pre_alert_service.dart';
 import 'package:share_plus/share_plus.dart';
@@ -24,6 +25,7 @@ import 'services/background_service.dart';
 import 'screens/login_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/pre_alert_screen.dart';
+import 'screens/dev_telemetry_screen.dart';
 import 'models/user.dart';
 import 'utils/app_toast.dart';
 import 'dart:async';
@@ -62,6 +64,23 @@ Future<void> _initializePlatformServices() async {
   try {
     await _requestStartupPermissions();
     await initializeService();
+
+    // Only start the background service if user already has an active session.
+    // Otherwise it will be started after login/register in AuthService.
+    if (appApiInitialized) {
+      final token = await appApi.getAccessToken();
+      if (token != null && token.isNotEmpty) {
+        final bgService = FlutterBackgroundService();
+        await bgService.startService();
+        debugPrint('Main: Background service started (existing session).');
+
+        // Best-effort: seed verified contacts cache so SMS fallback works
+        // even before the user opens the Family screen.
+        try {
+          await EmergencyContactsService(appApi).listContacts();
+        } catch (_) {}
+      }
+    }
   } catch (e, st) {
     // Never block app bootstrap because of optional background features.
     debugPrint('Startup init failed: $e');
@@ -75,6 +94,9 @@ Future<void> _requestStartupPermissions() async {
 
   // 2. Request Phone Call Permission
   await Permission.phone.request();
+
+  // 2b. Request SMS Permission (Android fallback alerts)
+  await Permission.sms.request();
 
   // 3. Request Location Permissions in order
   // Android requires "When In Use" before "Always"
@@ -654,11 +676,18 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       backgroundColor: AppTheme.background,
       appBar: AppBar(
-        title: const Text(
-          'JEPO',
-          style: TextStyle(
-            color: AppTheme.textDark,
-            fontWeight: FontWeight.bold,
+        title: GestureDetector(
+          onLongPress: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const DevTelemetryScreen()),
+            );
+          },
+          child: const Text(
+            'JEPO',
+            style: TextStyle(
+              color: AppTheme.textDark,
+              fontWeight: FontWeight.bold,
+            ),
           ),
         ),
         backgroundColor: Colors.transparent,

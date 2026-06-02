@@ -21,20 +21,23 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final List<OnboardingData> _pages = [
     OnboardingData(
       title: 'Bienvenido a JEPO',
-      description: 'Tu sistema de asistencia proactiva. Estamos aquí para cuidarte en cada trayecto.',
+      description:
+          'Tu sistema de asistencia proactiva. Estamos aquí para cuidarte en cada trayecto.',
       icon: Icons.security_outlined,
       color: AppTheme.primary,
     ),
     OnboardingData(
       title: 'Permisos Críticos',
-      description: 'Necesitamos acceso a tu ubicación y sensores para detectar impactos automáticamente.',
+      description:
+          'Necesitamos acceso a tu ubicacion, sensores y SMS para detectar impactos y avisar sin internet.',
       icon: Icons.location_on_outlined,
       color: Colors.blue,
       isPermissionPage: true,
     ),
     OnboardingData(
       title: 'Protección Total',
-      description: 'Activa "Mostrar sobre otras apps" para que podamos ayudarte incluso si tu móvil está bloqueado.',
+      description:
+          'Activa "Mostrar sobre otras apps" para que podamos ayudarte incluso si tu móvil está bloqueado.',
       icon: Icons.layers_outlined,
       color: Colors.orange,
       isOverlayPage: true,
@@ -59,7 +62,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               return _buildPage(_pages[index]);
             },
           ),
-          
+
           // Bottom controls
           Positioned(
             bottom: 50,
@@ -75,7 +78,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     (index) => _buildIndicator(index == _currentPage),
                   ),
                 ),
-                
+
                 // Button
                 NeumorphicButton(
                   onPressed: () {
@@ -88,7 +91,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       _finishOnboarding();
                     }
                   },
-                  padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 30,
+                    vertical: 15,
+                  ),
                   child: Text(
                     _currentPage == _pages.length - 1 ? 'EMPEZAR' : 'SIGUIENTE',
                     style: const TextStyle(
@@ -111,14 +117,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            data.icon,
-            size: 120,
-            color: data.color,
-          ).animate().scale(duration: 600.ms, curve: Curves.easeOutBack).fadeIn(),
-          
+          Icon(data.icon, size: 120, color: data.color)
+              .animate()
+              .scale(duration: 600.ms, curve: Curves.easeOutBack)
+              .fadeIn(),
+
           const SizedBox(height: 40),
-          
+
           Text(
             data.title,
             style: const TextStyle(
@@ -128,9 +133,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             ),
             textAlign: TextAlign.center,
           ).animate().fadeIn(delay: 200.ms).slideY(begin: 0.2, end: 0),
-          
+
           const SizedBox(height: 20),
-          
+
           Text(
             data.description,
             style: const TextStyle(
@@ -140,7 +145,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             ),
             textAlign: TextAlign.center,
           ).animate().fadeIn(delay: 400.ms).slideY(begin: 0.2, end: 0),
-          
+
           if (data.isPermissionPage || data.isOverlayPage) ...[
             const SizedBox(height: 40),
             _buildPermissionStatus(data.isOverlayPage),
@@ -152,7 +157,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   Widget _buildPermissionStatus(bool isOverlay) {
     return FutureBuilder<PermissionStatus>(
-      future: isOverlay ? Permission.systemAlertWindow.status : Permission.location.status,
+      future: isOverlay
+          ? Permission.systemAlertWindow.status
+          : Permission.location.status,
       builder: (context, snapshot) {
         final status = snapshot.data ?? PermissionStatus.denied;
         final isGranted = status.isGranted;
@@ -167,6 +174,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 Permission.notification,
                 Permission.sensors,
                 Permission.phone,
+                Permission.sms,
               ].request();
             }
             setState(() {}); // Refresh status
@@ -201,7 +209,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       height: 8,
       width: isActive ? 24 : 8,
       decoration: BoxDecoration(
-        color: isActive ? AppTheme.primary : AppTheme.textLight.withOpacity(0.3),
+        color: isActive
+            ? AppTheme.primary
+            : AppTheme.textLight.withOpacity(0.3),
         borderRadius: BorderRadius.circular(4),
       ),
     );

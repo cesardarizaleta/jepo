@@ -7,6 +7,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:sensors_plus/sensors_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/incident_alert.dart';
+import 'ai_telemetry_validator.dart';
 import 'alert_queue_service.dart';
 import 'api_client.dart';
 import 'alerts_service.dart';
@@ -86,7 +87,7 @@ Future<void> initializeService() async {
   await service.configure(
     androidConfiguration: AndroidConfiguration(
       onStart: onStart,
-      autoStart: true,
+      autoStart: false,
       isForegroundMode: true,
       notificationChannelId: monitoringChannelId, // Default to monitoring
       initialNotificationTitle: 'Jepo Activo',
@@ -94,7 +95,7 @@ Future<void> initializeService() async {
       foregroundServiceNotificationId: monitoringNotificationId,
     ),
     iosConfiguration: IosConfiguration(
-      autoStart: true,
+      autoStart: false,
       onForeground: onStart,
       onBackground: onIosBackground,
     ),
@@ -356,137 +357,207 @@ void onStart(ServiceInstance service) async {
   });
 
   // -------------------------------------------------------------------------
-  // Phase 2: Sensor Monitoring — Impact Detection
+  // Phase 2: Sensor Monitoring — AI-Based Fall Detection (Sliding Window)
   // -------------------------------------------------------------------------
+
+  // Initialize the TFLite AI model for fall detection.
+  final aiValidator = AiTelemetryValidator();
+  await aiValidator.initialize();
+
+  // Sliding window buffer: accumulates sensor readings for inference.
+  // Each entry: {'ax': ..., 'ay': ..., 'az': ..., 'gx': ..., 'gy': ..., 'gz': ...}
+  final List<Map<String, double>> _sensorWindow = [];
+  double _latestGx = 0, _latestGy = 0, _latestGz = 0;
+
+  // Subscribe to gyroscope to keep latest reading available.
+  gyroscopeEventStream().listen((GyroscopeEvent gEvent) {
+    _latestGx = gEvent.x;
+    _latestGy = gEvent.y;
+    _latestGz = gEvent.z;
+  });
 
   accelerometerEventStream().listen(
     (AccelerometerEvent event) async {
-      // Calculate G-force magnitude.
-      double magnitude = (event.x.abs() + event.y.abs() + event.z.abs());
+      // Accumulate sample into sliding window.
+      _sensorWindow.add({
+        'ax': event.x,
+        'ay': event.y,
+        'az': event.z,
+        'gx': _latestGx,
+        'gy': _latestGy,
+        'gz': _latestGz,
+      });
 
-      if (magnitude > _impactThreshold) {
-        // Fast memory check to strictly prevent async race conditions
-        final now = DateTime.now().toUtc();
-        if (_isConfirmingMemory) {
-          return; // Already waiting for user response
-        }
-        if (_lastImpactMemory != null &&
-            now.difference(_lastImpactMemory!) <
-                const Duration(seconds: _impactDebounceSeconds)) {
+      // Keep only the latest WINDOW_SIZE samples (sliding window).
+      if (_sensorWindow.length > AiTelemetryValidator.windowSize) {
+        _sensorWindow.removeAt(0);
+      }
+
+      // Only run inference when we have a full window.
+      if (_sensorWindow.length < AiTelemetryValidator.windowSize) return;
+
+      // Pre-filter: skip inference if motion is calm (saves battery).
+      final magnitude = event.x.abs() + event.y.abs() + event.z.abs();
+      if (magnitude < 25.0) return;
+
+      // ─── SESSION GUARD: Skip if user is NOT authenticated ───
+      if (!appApiInitialized) return;
+      try {
+        final token = await appApi.getAccessToken();
+        if (token == null || token.isEmpty) {
+          debugPrint(
+            'BackgroundService: No active session — ignoring impact.',
+          );
           return;
         }
-        _lastImpactMemory = now;
+      } catch (_) {
+        return;
+      }
+      // ─── END SESSION GUARD ──────────────────────────────────
 
-        // Debounce: sync to SharedPreferences for cross-isolate persistence.
-        try {
-          final prefs = await SharedPreferences.getInstance();
-          final lastImpactStr = prefs.getString(_lastImpactKey);
-          if (lastImpactStr != null && lastImpactStr.isNotEmpty) {
-            try {
-              final lastImpact = DateTime.parse(lastImpactStr).toUtc();
-              if (now.difference(lastImpact) <
-                  const Duration(seconds: _impactDebounceSeconds)) {
-                return; // within debounce window
-              }
-            } catch (_) {}
-          }
-          await prefs.setString(_lastImpactKey, now.toIso8601String());
-        } catch (e) {
-          debugPrint('BackgroundService: debounce error: $e');
-        }
+      // Fast memory check to strictly prevent async race conditions.
+      final now = DateTime.now().toUtc();
+      if (_isConfirmingMemory) {
+        return; // Already waiting for user response
+      }
+      if (_lastImpactMemory != null &&
+          now.difference(_lastImpactMemory!) <
+              const Duration(seconds: _impactDebounceSeconds)) {
+        return;
+      }
 
-        // Notify UI of risk detection.
-        service.invoke('risk_detected', {
-          "type": "IMPACT",
-          "magnitude": magnitude,
-        });
+      // ─── AI INFERENCE: Run TFLite model on the sliding window ───
+      // Map user sensitivity slider (15.0–60.0) to AI confidence threshold.
+      // Lower slider value = more sensitive = lower confidence required.
+      // Slider 15 → confidence 0.60 | Slider 37.5 → confidence 0.80 | Slider 60 → confidence 0.95
+      double aiConfidence = AiTelemetryValidator.defaultConfidenceThreshold;
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final sensitivity = prefs.getDouble(_thresholdKey) ?? 30.0;
+        // Linear mapping: sensitivity [15..60] → confidence [0.60..0.95]
+        aiConfidence = 0.60 + ((sensitivity - 15.0) / (60.0 - 15.0)) * (0.95 - 0.60);
+        aiConfidence = aiConfidence.clamp(0.60, 0.95);
+      } catch (_) {}
 
-        // ---------------------------------------------------------------
-        // Phase 3: Incident Dispatch Pipeline
-        //
-        // If an incident is already active, we DON'T create a new one.
-        // The location heartbeat timer handles ongoing updates.
-        // ---------------------------------------------------------------
+      final isRealFall = await aiValidator.isRealFall(
+        List<Map<String, double>>.from(_sensorWindow),
+        confidenceThreshold: aiConfidence,
+      );
 
-        if (lastKnownPosition == null) return;
-        if (!appApiInitialized) return;
+      if (!isRealFall) return; // Model says NOT a fall → ignore.
+      // ─── END AI INFERENCE ───────────────────────────────────────
 
-        if (PreAlertService.isIncidentActive) {
-          debugPrint(
-            'BackgroundService: incident active, sending impact data as update (heartbeat)',
-          );
-          final eventId = _generateEventId();
-          final payload = CreateIncidentAlertDto(
-            latitud: lastKnownPosition!.latitude,
-            longitud: lastKnownPosition!.longitude,
-            urlAudioContexto: appApi.baseUrl,
-            fechaHora: DateTime.now().toUtc(),
-            esProactiva: false, // Heartbeat: updates current incident
-            clientEventId: eventId,
-          );
+      _lastImpactMemory = now;
+
+      // Debounce: sync to SharedPreferences for cross-isolate persistence.
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final lastImpactStr = prefs.getString(_lastImpactKey);
+        if (lastImpactStr != null && lastImpactStr.isNotEmpty) {
           try {
-            await AlertQueueService(
-              appApi,
-            ).sendOrQueue(payload, bypassConfirmation: true);
-          } catch (e) {
-            debugPrint('Heartbeat update failed: $e');
-          }
-          return;
+            final lastImpact = DateTime.parse(lastImpactStr).toUtc();
+            if (now.difference(lastImpact) <
+                const Duration(seconds: _impactDebounceSeconds)) {
+              return; // within debounce window
+            }
+          } catch (_) {}
         }
+        await prefs.setString(_lastImpactKey, now.toIso8601String());
+      } catch (e) {
+        debugPrint('BackgroundService: debounce error: $e');
+      }
 
-        // Show critical alert notification immediately.
-        _showCriticalNotification(flutterLocalNotificationsPlugin);
+      // Notify UI of risk detection.
+      service.invoke('risk_detected', {
+        "type": "AI_FALL_DETECTED",
+        "magnitude": magnitude,
+      });
 
-        // NEW: Wait for user confirmation (False Positive check)
-        debugPrint('BackgroundService: Requesting confirmation via UI (5s)...');
-        _isConfirmingMemory = true;
-        final shouldSend = await requestConfirmationViaUI(5);
+      // ---------------------------------------------------------------
+      // Phase 3: Incident Dispatch Pipeline
+      //
+      // If an incident is already active, we DON'T create a new one.
+      // The location heartbeat timer handles ongoing updates.
+      // ---------------------------------------------------------------
+
+      if (lastKnownPosition == null) return;
+      if (!appApiInitialized) return;
+
+      if (PreAlertService.isIncidentActive) {
         debugPrint(
-          'BackgroundService: Confirmation result: shouldSend=$shouldSend',
+          'BackgroundService: incident active, sending impact data as update (heartbeat)',
         );
-        if (!shouldSend) {
-          debugPrint(
-            'BackgroundService: User confirmed safe, alert cancelled.',
-          );
-          // Remove the critical notification if user confirmed safe
-          await flutterLocalNotificationsPlugin.cancel(alertNotificationId);
-          return;
-        }
-
-        // Generate a client event ID for deduplication.
         final eventId = _generateEventId();
-
         final payload = CreateIncidentAlertDto(
           latitud: lastKnownPosition!.latitude,
           longitud: lastKnownPosition!.longitude,
           urlAudioContexto: appApi.baseUrl,
           fechaHora: DateTime.now().toUtc(),
-          esProactiva: true,
+          esProactiva: false, // Heartbeat: updates current incident
           clientEventId: eventId,
         );
-
         try {
-          final sent = await AlertQueueService(
+          await AlertQueueService(
             appApi,
           ).sendOrQueue(payload, bypassConfirmation: true);
-          if (sent) {
-            // Alert was created successfully.
-            final incId = await AlertQueueService(appApi).activeIncidentId;
-            if (incId != null) {
-              PreAlertService.activateIncident(incId);
-            }
-          }
         } catch (e) {
-          debugPrint('Background alert send/queue failed: $e');
+          debugPrint('Heartbeat update failed: $e');
         }
-
-        DiagnosticLogService.logBackgroundEvent(
-          'impact_detected',
-          detail: 'magnitude=${magnitude.toStringAsFixed(1)} eventId=$eventId',
-        );
-
-        // Notification was already shown at the start of the confirmation window.
+        return;
       }
+
+      // Show critical alert notification immediately.
+      _showCriticalNotification(flutterLocalNotificationsPlugin);
+
+      // NEW: Wait for user confirmation (False Positive check)
+      debugPrint('BackgroundService: Requesting confirmation via UI (5s)...');
+      _isConfirmingMemory = true;
+      final shouldSend = await requestConfirmationViaUI(5);
+      debugPrint(
+        'BackgroundService: Confirmation result: shouldSend=$shouldSend',
+      );
+      if (!shouldSend) {
+        debugPrint(
+          'BackgroundService: User confirmed safe, alert cancelled.',
+        );
+        // Remove the critical notification if user confirmed safe
+        await flutterLocalNotificationsPlugin.cancel(alertNotificationId);
+        return;
+      }
+
+      // Generate a client event ID for deduplication.
+      final eventId = _generateEventId();
+
+      final payload = CreateIncidentAlertDto(
+        latitud: lastKnownPosition!.latitude,
+        longitud: lastKnownPosition!.longitude,
+        urlAudioContexto: appApi.baseUrl,
+        fechaHora: DateTime.now().toUtc(),
+        esProactiva: true,
+        clientEventId: eventId,
+      );
+
+      try {
+        final sent = await AlertQueueService(
+          appApi,
+        ).sendOrQueue(payload, bypassConfirmation: true);
+        if (sent) {
+          // Alert was created successfully.
+          final incId = await AlertQueueService(appApi).activeIncidentId;
+          if (incId != null) {
+            PreAlertService.activateIncident(incId);
+          }
+        }
+      } catch (e) {
+        debugPrint('Background alert send/queue failed: $e');
+      }
+
+      DiagnosticLogService.logBackgroundEvent(
+        'ai_fall_detected',
+        detail: 'magnitude=${magnitude.toStringAsFixed(1)} eventId=$eventId',
+      );
+
+      // Notification was already shown at the start of the confirmation window.
     },
     onError: (e) {
       debugPrint("Error in accelerometer stream: $e");
