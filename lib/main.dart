@@ -691,6 +691,8 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() => _isSendingAssistance = true);
 
     try {
+      AppToast.info(context, 'Obteniendo ubicación actual...');
+
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
@@ -706,6 +708,9 @@ class _HomeScreenState extends State<HomeScreen> {
         desiredAccuracy: LocationAccuracy.high,
       );
 
+      if (!context.mounted) return;
+      AppToast.info(context, 'Enviando alerta de asistencia...');
+
       final payload = CreateIncidentAlertDto(
         latitud: pos.latitude,
         longitud: pos.longitude,
@@ -716,10 +721,22 @@ class _HomeScreenState extends State<HomeScreen> {
         clientEventId: 'asistencia_${DateTime.now().millisecondsSinceEpoch}',
       );
 
-      await AlertQueueService(appApi).sendOrQueue(
+      final success = await AlertQueueService(appApi).sendOrQueue(
         payload,
         bypassConfirmation: true,
       );
+
+      if (context.mounted) {
+        if (success) {
+          AppToast.success(context, 'Asistencia enviada con éxito');
+        } else {
+          // sendOrQueue returns false if it queued the alert or triggered fallback
+          AppToast.success(
+            context,
+            'Asistencia procesada. Notificando contactos.',
+          );
+        }
+      }
     } catch (e) {
       debugPrint('Error sending assistance: $e');
       if (context.mounted) {
