@@ -6,6 +6,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:sensors_plus/sensors_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:audioplayers/audioplayers.dart';
 import '../models/incident_alert.dart';
 import 'ai_telemetry_validator.dart';
 import 'alert_queue_service.dart';
@@ -129,6 +130,8 @@ void onStart(ServiceInstance service) async {
 
   await flutterLocalNotificationsPlugin.initialize(initializationSettings);
 
+  AudioPlayer? backgroundAudioPlayer;
+
   // Listen for confirmation response from UI (via background service IPC)
   Completer<bool>? confirmationCompleter;
   service.on('pre_alert_response').listen((event) {
@@ -136,6 +139,17 @@ void onStart(ServiceInstance service) async {
     if (confirmationCompleter != null && !confirmationCompleter!.isCompleted) {
       final isSafe = event?['isSafe'] ?? false;
       confirmationCompleter!.complete(!isSafe); // shouldSend = !isSafe
+    }
+  });
+
+  service.on('pre_alert_ui_mounted').listen((event) {
+    debugPrint('BackgroundService: UI pre-alert screen mounted, silencing background audio');
+    try {
+      backgroundAudioPlayer?.stop();
+      backgroundAudioPlayer?.dispose();
+      backgroundAudioPlayer = null;
+    } catch (e) {
+      debugPrint('BackgroundService: Error stopping audio: $e');
     }
   });
 
@@ -189,6 +203,16 @@ void onStart(ServiceInstance service) async {
   Future<bool> requestConfirmationViaUI(int seconds) async {
     confirmationCompleter = Completer<bool>();
 
+    // Start playing background alert sound loop
+    try {
+      backgroundAudioPlayer = AudioPlayer();
+      await backgroundAudioPlayer!.setReleaseMode(ReleaseMode.loop);
+      await backgroundAudioPlayer!.play(AssetSource('alertSound.mp3'));
+      debugPrint('BackgroundService: Started alert sound loop in background');
+    } catch (e) {
+      debugPrint('BackgroundService: Error starting audio in background: $e');
+    }
+
     // Store pending pre-alert FIRST (for recovery if app was killed)
     await PreAlertService.storePendingPreAlert(seconds);
 
@@ -234,6 +258,17 @@ void onStart(ServiceInstance service) async {
     } finally {
       _isConfirmingMemory = false;
       confirmationCompleter = null;
+
+      // Stop background alert sound loop if it's still running
+      try {
+        backgroundAudioPlayer?.stop();
+        backgroundAudioPlayer?.dispose();
+        backgroundAudioPlayer = null;
+        debugPrint('BackgroundService: Stopped alert sound loop');
+      } catch (e) {
+        debugPrint('BackgroundService: Error stopping audio in background finally: $e');
+      }
+
       // Clear pending pre-alert now that we have a decision
       await PreAlertService.clearPendingPreAlert();
       // Cancel the pre-alert notification

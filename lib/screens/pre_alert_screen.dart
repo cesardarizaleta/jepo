@@ -2,6 +2,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:audioplayers/audioplayers.dart';
+import 'package:flutter_background_service/flutter_background_service.dart';
 import '../services/pre_alert_service.dart';
 
 class PreAlertScreen extends StatefulWidget {
@@ -18,6 +20,7 @@ class _PreAlertScreenState extends State<PreAlertScreen> with TickerProviderStat
   Timer? _timer;
   late AnimationController _pulseController;
   bool _resolved = false;
+  AudioPlayer? _audioPlayer;
 
   @override
   void initState() {
@@ -30,7 +33,40 @@ class _PreAlertScreenState extends State<PreAlertScreen> with TickerProviderStat
     
     _startTimer();
     _triggerHapticFeedback();
+    _playAlertSound();
+    _notifyUIActive();
     debugPrint('PreAlertScreen: SHOWN with ${widget.request.seconds}s countdown');
+  }
+
+  Future<void> _playAlertSound() async {
+    try {
+      _audioPlayer = AudioPlayer();
+      await _audioPlayer!.setReleaseMode(ReleaseMode.loop);
+      await _audioPlayer!.play(AssetSource('alertSound.mp3'));
+      debugPrint('PreAlertScreen: Alert sound playing in loop');
+    } catch (e) {
+      debugPrint('PreAlertScreen: Error playing alert sound: $e');
+    }
+  }
+
+  void _notifyUIActive() {
+    try {
+      FlutterBackgroundService().invoke('pre_alert_ui_mounted');
+      debugPrint('PreAlertScreen: Notified background service that UI is mounted');
+    } catch (e) {
+      debugPrint('PreAlertScreen: Failed to invoke pre_alert_ui_mounted IPC: $e');
+    }
+  }
+
+  void _stopAlertSound() {
+    try {
+      _audioPlayer?.stop();
+      _audioPlayer?.dispose();
+      _audioPlayer = null;
+      debugPrint('PreAlertScreen: Alert sound stopped');
+    } catch (e) {
+      debugPrint('PreAlertScreen: Error stopping alert sound: $e');
+    }
   }
 
   void _startTimer() {
@@ -57,6 +93,7 @@ class _PreAlertScreenState extends State<PreAlertScreen> with TickerProviderStat
   void _resolve(bool isSafe) {
     if (_resolved) return; // Prevent double resolution
     _resolved = true;
+    _stopAlertSound();
     debugPrint('PreAlertScreen: resolved isSafe=$isSafe');
     _timer?.cancel();
     widget.request.resolveAsSafe(isSafe);
@@ -69,6 +106,7 @@ class _PreAlertScreenState extends State<PreAlertScreen> with TickerProviderStat
   void dispose() {
     _timer?.cancel();
     _pulseController.dispose();
+    _stopAlertSound();
     // Safety: if screen is disposed without resolution (e.g. system back nav),
     // resolve as unsafe so the alert still fires.
     if (!_resolved) {
