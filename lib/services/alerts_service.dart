@@ -11,8 +11,9 @@ class AlertsService {
   Future<IncidentAlertCreateResult> createAlert(
     CreateIncidentAlertDto payload,
   ) async {
+    final url = payload.isManual ? '/api/alertas/manual' : '/api/alertas';
     final envelope = await api.postEnvelope(
-      '/api/alertas',
+      url,
       body: payload.toJson(),
       requiresAuth: true,
     );

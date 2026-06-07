@@ -75,7 +75,7 @@ class NeumorphicContainer extends StatelessWidget {
 
 class NeumorphicButton extends StatefulWidget {
   final Widget child;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
   final double borderRadius;
   final Color? color;
   final EdgeInsetsGeometry? padding;
@@ -83,7 +83,7 @@ class NeumorphicButton extends StatefulWidget {
   const NeumorphicButton({
     super.key,
     required this.child,
-    required this.onPressed,
+    this.onPressed,
     this.borderRadius = 16.0,
     this.color,
     this.padding,
@@ -98,19 +98,20 @@ class _NeumorphicButtonState extends State<NeumorphicButton> {
 
   @override
   Widget build(BuildContext context) {
+    final bool isEnabled = widget.onPressed != null;
     return GestureDetector(
-      onTapDown: (_) => setState(() => _isPressed = true),
-      onTapUp: (_) => setState(() => _isPressed = false),
-      onTapCancel: () => setState(() => _isPressed = false),
+      onTapDown: isEnabled ? (_) => setState(() => _isPressed = true) : null,
+      onTapUp: isEnabled ? (_) => setState(() => _isPressed = false) : null,
+      onTapCancel: isEnabled ? () => setState(() => _isPressed = false) : null,
       onTap: widget.onPressed,
       child: AnimatedScale(
-        scale: _isPressed ? 0.97 : 1.0,
+        scale: (isEnabled && _isPressed) ? 0.97 : 1.0,
         duration: 100.ms,
         curve: Curves.easeInOut,
         child: NeumorphicContainer(
           padding: EdgeInsets.zero,
           borderRadius: widget.borderRadius,
-          isPressed: _isPressed,
+          isPressed: isEnabled && _isPressed,
           color: widget.color,
           useAnimation: false,
           child: Padding(

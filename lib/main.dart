@@ -27,6 +27,7 @@ import 'screens/onboarding_screen.dart';
 import 'screens/pre_alert_screen.dart';
 import 'screens/dev_telemetry_screen.dart';
 import 'models/user.dart';
+import 'models/incident_alert.dart';
 import 'utils/app_toast.dart';
 import 'dart:async';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -532,6 +533,11 @@ class _HomeScreenState extends State<HomeScreen> {
   User? _user;
   bool _loadingUser = true;
 
+  // Assistance button cooldown state
+  final List<DateTime> _assistancePressTimes = [];
+  DateTime? _assistanceCooldownStart;
+  bool _isSendingAssistance = false;
+
   @override
   void initState() {
     super.initState();
@@ -639,6 +645,89 @@ class _HomeScreenState extends State<HomeScreen> {
       if (context.mounted) {
         Navigator.of(context).pop();
         AppToast.error(context, 'No se pudo obtener la ubicación');
+      }
+    }
+  }
+
+  Future<void> _sendAssistance(BuildContext context) async {
+    final now = DateTime.now();
+
+    // 1. Check Cooldown
+    if (_assistanceCooldownStart != null) {
+      final diff = now.difference(_assistanceCooldownStart!);
+      if (diff < const Duration(minutes: 1)) {
+        final remaining = 60 - diff.inSeconds;
+        AppToast.warning(
+          context,
+          'Botón en cooldown. Espera $remaining segundos.',
+        );
+        return;
+      } else {
+        _assistanceCooldownStart = null;
+      }
+    }
+
+    // 2. Track presses within 1 minute
+    _assistancePressTimes.removeWhere(
+      (time) => now.difference(time) > const Duration(minutes: 1),
+    );
+    _assistancePressTimes.add(now);
+
+    // If 3 presses in 1 minute, trigger cooldown
+    if (_assistancePressTimes.length >= 3) {
+      _assistanceCooldownStart = now;
+      _assistancePressTimes.clear();
+      AppToast.warning(
+        context,
+        'Límite de presiones alcanzado. Cooldown de 1 minuto activado.',
+      );
+    }
+
+    // 3. Process the action
+    if (_isSendingAssistance) {
+      return;
+    }
+
+    setState(() => _isSendingAssistance = true);
+
+    try {
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          if (context.mounted) {
+            AppToast.error(context, 'Permiso de ubicación denegado');
+          }
+          return;
+        }
+      }
+
+      final pos = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+
+      final payload = CreateIncidentAlertDto(
+        latitud: pos.latitude,
+        longitud: pos.longitude,
+        urlAudioContexto: appApi.baseUrl,
+        fechaHora: DateTime.now().toUtc(),
+        esProactiva: false,
+        isManual: true,
+        clientEventId: 'asistencia_${DateTime.now().millisecondsSinceEpoch}',
+      );
+
+      await AlertQueueService(appApi).sendOrQueue(
+        payload,
+        bypassConfirmation: true,
+      );
+    } catch (e) {
+      debugPrint('Error sending assistance: $e');
+      if (context.mounted) {
+        AppToast.error(context, 'Error al enviar asistencia: $e');
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSendingAssistance = false);
       }
     }
   }
@@ -809,6 +898,18 @@ class _HomeScreenState extends State<HomeScreen> {
                       .animate()
                       .fadeIn(delay: 500.ms)
                       .scale(curve: Curves.easeOutBack),
+                  _buildMenuCard(
+                        context,
+                        title: 'Asistencia',
+                        icon: Icons.volunteer_activism,
+                        color: AppTheme.primary,
+                        iconColor: Colors.white,
+                        isLoading: _isSendingAssistance,
+                        onTap: () => _sendAssistance(context),
+                      )
+                      .animate()
+                      .fadeIn(delay: 600.ms)
+                      .scale(curve: Curves.easeOutBack),
                 ],
               ),
             ),
@@ -825,33 +926,44 @@ class _HomeScreenState extends State<HomeScreen> {
     required VoidCallback onTap,
     Color? color,
     Color? iconColor,
+    bool isLoading = false,
   }) {
     return NeumorphicButton(
-      onPressed: onTap,
-      color: color,
+      onPressed: isLoading ? null : onTap,
+      color: isLoading ? Colors.grey : color,
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          title == 'Perfil'
-              ? Hero(
-                  tag: 'profile_image',
-                  child: Icon(
-                    icon,
-                    size: 40,
-                    color: iconColor ?? AppTheme.primary,
-                  ),
-                )
-              : Icon(icon, size: 40, color: iconColor ?? AppTheme.primary),
+          if (isLoading)
+            const SizedBox(
+              width: 32,
+              height: 32,
+              child: CircularProgressIndicator(
+                strokeWidth: 3,
+                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+              ),
+            )
+          else if (title == 'Perfil')
+            Hero(
+              tag: 'profile_image',
+              child: Icon(
+                icon,
+                size: 40,
+                color: iconColor ?? AppTheme.primary,
+              ),
+            )
+          else
+            Icon(icon, size: 40, color: iconColor ?? AppTheme.primary),
           const SizedBox(height: 12),
           Flexible(
             child: FittedBox(
               fit: BoxFit.scaleDown,
               child: Text(
-                title,
+                isLoading ? 'Enviando...' : title,
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
-                  color: iconColor ?? AppTheme.textDark,
+                  color: isLoading ? Colors.white70 : (iconColor ?? AppTheme.textDark),
                 ),
                 textAlign: TextAlign.center,
                 maxLines: 2,

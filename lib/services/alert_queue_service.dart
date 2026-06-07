@@ -134,7 +134,7 @@ class AlertQueueService {
 
     // Incident cooldown check: only allow a new incident if enough time has
     // passed since the last one.
-    if (payload.esProactiva) {
+    if (payload.esProactiva && !payload.isManual) {
       final canCreate = await _canCreateNewIncident();
       if (!canCreate) {
         debugPrint(
@@ -186,7 +186,7 @@ class AlertQueueService {
         }
 
         // Track active incident for cooldown and heartbeat logic.
-        if (payload.esProactiva && result.alerta?.id != null) {
+        if ((payload.esProactiva || payload.isManual) && result.alerta?.id != null) {
           await _setActiveIncident(result.alerta!.id!, now);
           DiagnosticLogService.logIncidentCreated(
             alertId: result.alerta!.id!,

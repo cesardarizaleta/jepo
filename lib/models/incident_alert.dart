@@ -61,6 +61,7 @@ class CreateIncidentAlertDto {
   final String? urlAudioContexto;
   final DateTime fechaHora;
   final bool esProactiva;
+  final bool isManual;
 
   /// Client-generated UUID for deduplication. If two DTOs share the same
   /// [clientEventId], the alert queue will treat them as the same logical
@@ -73,6 +74,7 @@ class CreateIncidentAlertDto {
     required this.urlAudioContexto,
     required this.fechaHora,
     required this.esProactiva,
+    this.isManual = false,
     this.clientEventId,
   });
 
@@ -85,6 +87,7 @@ class CreateIncidentAlertDto {
           DateTime.tryParse(json['fecha_hora']?.toString() ?? '')?.toUtc() ??
           DateTime.now().toUtc(),
       esProactiva: json['es_proactiva'] == true,
+      isManual: json['is_manual'] == true,
       clientEventId: json['client_event_id']?.toString(),
     );
   }
@@ -97,6 +100,7 @@ class CreateIncidentAlertDto {
         'url_audio_contexto': urlAudioContexto,
       'fecha_hora': fechaHora.toUtc().toIso8601String(),
       'es_proactiva': esProactiva,
+      'is_manual': isManual,
       if (clientEventId != null && clientEventId!.isNotEmpty)
         'client_event_id': clientEventId,
     };
