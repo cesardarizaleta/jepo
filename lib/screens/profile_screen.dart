@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import '../models/incident_alert.dart';
 import '../models/user.dart';
 import '../services/api_client.dart';
 import '../services/auth_service.dart';
+import '../services/metrics_service.dart';
+import 'alert_history_screen.dart';
 import 'diagnostics_screen.dart';
 import 'login_screen.dart';
 import 'edit_profile_screen.dart';
@@ -21,6 +24,7 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   User? _user;
   bool _loading = true;
+  AlertMetrics _metrics = AlertMetrics.empty;
 
   @override
   void initState() {
@@ -32,13 +36,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
     setState(() => _loading = true);
     try {
       final svc = AuthService(appApi);
+      final metricsSvc = MetricsService(appApi);
       final local = await svc.getCurrentUser();
       if (local != null) {
         _user = local;
       } else {
-        // Try fetching latest from server
         final me = await svc.me();
         if (me != null) _user = me;
+      }
+      try {
+        _metrics = await metricsSvc.getMetrics();
+      } catch (e) {
+        debugPrint('Metrics load failed: $e');
       }
     } catch (e) {
       debugPrint('Profile load failed: $e');
@@ -119,6 +128,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   _buildDetailsList(),
 
                   const SizedBox(height: 24),
+                  _buildMetricsPreview(),
+                  const SizedBox(height: 24),
                   // Options
                   _buildProfileOption(
                     context,
@@ -134,6 +145,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       if (res == true) {
                         await _loadUser();
                       }
+                    },
+                  ),
+                  _buildProfileOption(
+                    context,
+                    'Historial y Métricas',
+                    Icons.analytics_outlined,
+                    onPressed: () async {
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const AlertHistoryScreen(),
+                        ),
+                      );
+                      if (mounted) await _loadUser();
                     },
                   ),
                   _buildProfileOption(
@@ -204,6 +229,52 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   String _displayName() {
     return _user?.fullName ?? 'Usuario';
+  }
+
+  Widget _buildMetricsPreview() {
+    return NeumorphicContainer(
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: AppTheme.primary.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(
+              Icons.analytics_outlined,
+              color: AppTheme.primary,
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Resumen de alertas',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.textDark,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${_metrics.totalAlertas} alertas · '
+                  '${_metrics.tasaFalsosPositivos.toStringAsFixed(1)}% falsos positivos',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: AppTheme.textLight,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildDetailsList() {
