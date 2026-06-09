@@ -78,38 +78,4 @@ class MetricsService {
           totalPaginas: 0,
         );
   }
-
-  Future<IncidentAlert> resolveAlert(
-    int id,
-    AlertStatus estado, {
-    String? notas,
-  }) async {
-    final envelope = await api.patchEnvelope(
-      '/api/alertas/$id/resolver',
-      body: <String, dynamic>{
-        'estado': estado.apiValue,
-        if (notas != null && notas.isNotEmpty) 'notas_resolucion': notas,
-      },
-      requiresAuth: true,
-    );
-
-    final response = ApiResponse<IncidentAlert>.fromJson(
-      envelope.raw,
-      dataParser: (value) {
-        if (value is Map<String, dynamic>) {
-          return IncidentAlert.fromJson(value);
-        }
-        if (value is Map) {
-          return IncidentAlert.fromJson(value.cast<String, dynamic>());
-        }
-        throw const FormatException('Respuesta de resolución inválida');
-      },
-    );
-
-    final alert = response.data;
-    if (alert == null) {
-      throw const FormatException('No se pudo resolver la alerta');
-    }
-    return alert;
-  }
 }

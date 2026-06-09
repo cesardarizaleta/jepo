@@ -138,115 +138,161 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen> {
       context: context,
       backgroundColor: AppTheme.background,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
+      isScrollControlled: true,
       builder: (ctx) {
         return StatefulBuilder(
           builder: (context, setModalState) {
             return Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Filtros',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                      color: AppTheme.textDark,
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(ctx).viewInsets.bottom,
+              ),
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Text(
+                          'Filtros',
+                          style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                            color: AppTheme.textDark,
+                          ),
+                        ),
+                        const Spacer(),
+                        if (estado != null || desde != null || hasta != null)
+                          TextButton.icon(
+                            onPressed: () {
+                              setModalState(() {
+                                estado = null;
+                                desde = null;
+                                hasta = null;
+                              });
+                            },
+                            icon: const Icon(Icons.clear_all, size: 18),
+                            label: const Text('Limpiar'),
+                            style: TextButton.styleFrom(
+                              foregroundColor: AppTheme.textLight,
+                            ),
+                          ),
+                      ],
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  DropdownButtonFormField<AlertStatus?>(
-                    value: estado,
-                    decoration: const InputDecoration(labelText: 'Estado'),
-                    items: [
-                      const DropdownMenuItem(
-                        value: null,
-                        child: Text('Todos'),
+                    const SizedBox(height: 24),
+                    
+                    // Estado filter with chips
+                    const Text(
+                      'Estado',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.textLight,
                       ),
-                      ...AlertStatus.values.map(
-                        (s) => DropdownMenuItem(
-                          value: s,
-                          child: Text(s.label),
+                    ),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      children: [
+                        _FilterChip(
+                          label: 'Todos',
+                          isSelected: estado == null,
+                          onTap: () => setModalState(() => estado = null),
                         ),
+                        ...AlertStatus.values.map(
+                          (s) => _FilterChip(
+                            label: s.label,
+                            isSelected: estado == s,
+                            color: s.color,
+                            onTap: () => setModalState(() => estado = s),
+                          ),
+                        ),
+                      ],
+                    ),
+                    
+                    const SizedBox(height: 24),
+                    
+                    // Date range filter
+                    const Text(
+                      'Rango de fechas',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.textLight,
                       ),
-                    ],
-                    onChanged: (v) => setModalState(() => estado = v),
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: () async {
-                            final picked = await showDatePicker(
-                              context: context,
-                              initialDate: desde ?? DateTime.now(),
-                              firstDate: DateTime(2020),
-                              lastDate: DateTime.now(),
-                            );
-                            if (picked != null) {
-                              setModalState(() => desde = picked);
-                            }
-                          },
-                          child: Text(
-                            desde == null
-                                ? 'Desde'
-                                : _formatDate(desde!),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _DateButton(
+                            label: 'Desde',
+                            date: desde,
+                            onTap: () async {
+                              final picked = await showDatePicker(
+                                context: context,
+                                initialDate: desde ?? DateTime.now(),
+                                firstDate: DateTime(2020),
+                                lastDate: DateTime.now(),
+                              );
+                              if (picked != null) {
+                                setModalState(() => desde = picked);
+                              }
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _DateButton(
+                            label: 'Hasta',
+                            date: hasta,
+                            onTap: () async {
+                              final picked = await showDatePicker(
+                                context: context,
+                                initialDate: hasta ?? DateTime.now(),
+                                firstDate: DateTime(2020),
+                                lastDate: DateTime.now(),
+                              );
+                              if (picked != null) {
+                                setModalState(() => hasta = picked);
+                              }
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                    
+                    const SizedBox(height: 28),
+                    
+                    // Apply button
+                    SizedBox(
+                      width: double.infinity,
+                      height: 52,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppTheme.primary,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
+                        onPressed: () => Navigator.pop(ctx, true),
+                        child: const Text(
+                          'Aplicar filtros',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: () async {
-                            final picked = await showDatePicker(
-                              context: context,
-                              initialDate: hasta ?? DateTime.now(),
-                              firstDate: DateTime(2020),
-                              lastDate: DateTime.now(),
-                            );
-                            if (picked != null) {
-                              setModalState(() => hasta = picked);
-                            }
-                          },
-                          child: Text(
-                            hasta == null ? 'Hasta' : _formatDate(hasta!),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextButton(
-                          onPressed: () {
-                            setModalState(() {
-                              estado = null;
-                              desde = null;
-                              hasta = null;
-                            });
-                          },
-                          child: const Text('Limpiar'),
-                        ),
-                      ),
-                      Expanded(
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppTheme.primary,
-                            foregroundColor: Colors.white,
-                          ),
-                          onPressed: () => Navigator.pop(ctx, true),
-                          child: const Text('Aplicar'),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+                    ),
+                  ],
+                ),
               ),
             );
           },
@@ -261,103 +307,6 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen> {
         _filterHasta = hasta;
       });
       await _loadAll(refresh: true);
-    }
-  }
-
-  Future<void> _showResolveDialog(IncidentAlert alert) async {
-    final notasController = TextEditingController();
-    AlertStatus? selected;
-
-    final resolved = await showDialog<bool>(
-      context: context,
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              backgroundColor: AppTheme.background,
-              title: const Text('Resolver alerta'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text(
-                    'Clasifica esta alerta para mejorar las métricas del sistema.',
-                    style: TextStyle(color: AppTheme.textLight),
-                  ),
-                  const SizedBox(height: 16),
-                  _ResolveOption(
-                    label: 'Alerta real',
-                    icon: Icons.warning_amber_rounded,
-                    color: AlertStatus.real.color,
-                    selected: selected == AlertStatus.real,
-                    onTap: () =>
-                        setDialogState(() => selected = AlertStatus.real),
-                  ),
-                  const SizedBox(height: 8),
-                  _ResolveOption(
-                    label: 'Falso positivo',
-                    icon: Icons.block_outlined,
-                    color: AlertStatus.falsoPositivo.color,
-                    selected: selected == AlertStatus.falsoPositivo,
-                    onTap: () => setDialogState(
-                      () => selected = AlertStatus.falsoPositivo,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: notasController,
-                    maxLines: 2,
-                    decoration: const InputDecoration(
-                      labelText: 'Notas (opcional)',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx, false),
-                  child: const Text('Cancelar'),
-                ),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.primary,
-                    foregroundColor: Colors.white,
-                  ),
-                  onPressed: selected == null
-                      ? null
-                      : () => Navigator.pop(ctx, true),
-                  child: const Text('Confirmar'),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-
-    if (resolved != true || selected == null || alert.id == null) {
-      notasController.dispose();
-      return;
-    }
-
-    try {
-      await _metrics.resolveAlert(
-        alert.id!,
-        selected!,
-        notas: notasController.text.trim().isEmpty
-            ? null
-            : notasController.text.trim(),
-      );
-      notasController.dispose();
-      if (mounted) {
-        AppToast.success(context, 'Alerta resuelta correctamente');
-        await _loadAll(refresh: true);
-      }
-    } catch (e) {
-      notasController.dispose();
-      if (mounted) {
-        AppToast.error(context, 'No se pudo resolver: $e');
-      }
     }
   }
 
@@ -583,11 +532,11 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen> {
   }
 
   Widget _buildAlertTile(IncidentAlert alert) {
-    final isPending = alert.estado == AlertStatus.pendiente;
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
-      child: NeumorphicButton(
-        onPressed: isPending ? () => _showResolveDialog(alert) : null,
+      child: NeumorphicContainer(
+        useAnimation: false,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         child: Row(
           children: [
             Container(
@@ -623,14 +572,6 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen> {
               ),
             ),
             _StatusBadge(status: alert.estado),
-            if (isPending) ...[
-              const SizedBox(width: 8),
-              const Icon(
-                Icons.chevron_right,
-                size: 18,
-                color: AppTheme.textLight,
-              ),
-            ],
           ],
         ),
       ),
@@ -709,54 +650,6 @@ class _StatusBadge extends StatelessWidget {
           fontSize: 11,
           fontWeight: FontWeight.w600,
           color: status.color,
-        ),
-      ),
-    );
-  }
-}
-
-class _ResolveOption extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final Color color;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _ResolveOption({
-    required this.label,
-    required this.icon,
-    required this.color,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: selected ? color : AppTheme.textLight.withValues(alpha: 0.3),
-            width: selected ? 2 : 1,
-          ),
-          color: selected ? color.withValues(alpha: 0.08) : null,
-        ),
-        child: Row(
-          children: [
-            Icon(icon, color: color),
-            const SizedBox(width: 12),
-            Text(
-              label,
-              style: TextStyle(
-                fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-                color: AppTheme.textDark,
-              ),
-            ),
-          ],
         ),
       ),
     );
@@ -894,5 +787,109 @@ class _AccuracyRingPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _AccuracyRingPainter oldDelegate) {
     return oldDelegate.accuracy != accuracy;
+  }
+}
+
+class _FilterChip extends StatelessWidget {
+  final String label;
+  final bool isSelected;
+  final Color? color;
+  final VoidCallback onTap;
+
+  const _FilterChip({
+    required this.label,
+    required this.isSelected,
+    this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? (color ?? AppTheme.primary).withValues(alpha: 0.15)
+              : AppTheme.textLight.withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected
+                ? (color ?? AppTheme.primary)
+                : AppTheme.textLight.withValues(alpha: 0.2),
+            width: 1.5,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: isSelected ? (color ?? AppTheme.primary) : AppTheme.textLight,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DateButton extends StatelessWidget {
+  final String label;
+  final DateTime? date;
+  final VoidCallback onTap;
+
+  const _DateButton({
+    required this.label,
+    this.date,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: AppTheme.textLight.withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: date != null
+                ? AppTheme.primary
+                : AppTheme.textLight.withValues(alpha: 0.2),
+            width: 1.5,
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+                color: AppTheme.textLight,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              date != null ? _formatDate(date!) : 'Seleccionar',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: date != null ? AppTheme.textDark : AppTheme.textLight,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _formatDate(DateTime dt) {
+    final local = dt.toLocal();
+    return '${local.day.toString().padLeft(2, '0')}/${local.month.toString().padLeft(2, '0')}/${local.year}';
   }
 }

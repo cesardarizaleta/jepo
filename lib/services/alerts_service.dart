@@ -77,10 +77,19 @@ class AlertsService {
     return response.data;
   }
 
-  Future<IncidentAlert?> updateAlert(int id, UpdateIncidentAlertDto payload) async {
+  Future<IncidentAlert?> updateAlertHeartbeat(
+    int id,
+    double latitud,
+    double longitud,
+  ) async {
     final envelope = await api.patchEnvelope(
       '/api/alertas/$id',
-      body: payload.toJson(),
+      body: <String, dynamic>{
+        'latitud': latitud,
+        'longitud': longitud,
+        'fecha_hora': DateTime.now().toUtc().toIso8601String(),
+        'es_proactiva': false,
+      },
       requiresAuth: true,
     );
     final response = ApiResponse<IncidentAlert>.fromJson(
@@ -100,5 +109,21 @@ class AlertsService {
 
   Future<void> deleteAlert(int id) async {
     await api.deleteEnvelope('/api/alertas/$id', requiresAuth: true);
+  }
+
+  Future<void> registerFalsoPositivo({
+    required double latitud,
+    required double longitud,
+    DateTime? fechaHora,
+  }) async {
+    await api.postEnvelope(
+      '/api/alertas/falso-positivo',
+      body: <String, dynamic>{
+        'latitud': latitud,
+        'longitud': longitud,
+        if (fechaHora != null) 'fecha_hora': fechaHora.toUtc().toIso8601String(),
+      },
+      requiresAuth: true,
+    );
   }
 }

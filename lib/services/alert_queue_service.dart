@@ -127,7 +127,22 @@ class AlertQueueService {
     if (!bypassConfirmation) {
       final shouldSend = await PreAlertService.requestConfirmation(seconds: 10);
       if (!shouldSend) {
-        debugPrint('AlertQueueService: user confirmed safe, dropping alert');
+        debugPrint('AlertQueueService: user confirmed safe, registering false positive');
+        try {
+          await AlertsService(api).registerFalsoPositivo(
+            latitud: payload.latitud,
+            longitud: payload.longitud,
+            fechaHora: payload.fechaHora,
+          );
+          await DiagnosticLogService.log(
+            category: 'incident',
+            event: 'false_positive_registered',
+            detail: 'lat=${payload.latitud}, lng=${payload.longitud}',
+            severity: 'info',
+          );
+        } catch (e) {
+          debugPrint('AlertQueueService: failed to register false positive: $e');
+        }
         return false;
       }
     }

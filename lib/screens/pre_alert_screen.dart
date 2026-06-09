@@ -1,9 +1,13 @@
 import 'dart:async';
+import 'dart:io';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
+import 'package:record/record.dart';
+import 'package:path_provider/path_provider.dart';
 import '../services/pre_alert_service.dart';
 
 class PreAlertScreen extends StatefulWidget {
@@ -21,6 +25,9 @@ class _PreAlertScreenState extends State<PreAlertScreen> with TickerProviderStat
   late AnimationController _pulseController;
   bool _resolved = false;
   AudioPlayer? _audioPlayer;
+  final Record _recorder = Record();
+  String? _audioPath;
+  String? _audioBase64;
 
   @override
   void initState() {
@@ -35,6 +42,7 @@ class _PreAlertScreenState extends State<PreAlertScreen> with TickerProviderStat
     _triggerHapticFeedback();
     _playAlertSound();
     _notifyUIActive();
+    _startAudioRecording();
     debugPrint('PreAlertScreen: SHOWN with ${widget.request.seconds}s countdown');
   }
 
@@ -46,6 +54,49 @@ class _PreAlertScreenState extends State<PreAlertScreen> with TickerProviderStat
       debugPrint('PreAlertScreen: Alert sound playing in loop');
     } catch (e) {
       debugPrint('PreAlertScreen: Error playing alert sound: $e');
+    }
+  }
+
+  Future<void> _startAudioRecording() async {
+    try {
+      if (!await _recorder.hasPermission()) {
+        debugPrint('PreAlertScreen: No recording permission');
+        return;
+      }
+
+      final tempDir = await getTemporaryDirectory();
+      _audioPath = '${tempDir.path}/alert_audio_${DateTime.now().millisecondsSinceEpoch}.m4a';
+      
+      await _recorder.start(
+        path: _audioPath,
+        encoder: AudioEncoder.aacLc,
+        bitRate: 128000,
+        samplingRate: 44100,
+      );
+      debugPrint('PreAlertScreen: Audio recording started');
+    } catch (e) {
+      debugPrint('PreAlertScreen: Error starting audio recording: $e');
+    }
+  }
+
+  Future<void> _stopAndEncodeAudio() async {
+    try {
+      if (await _recorder.isRecording()) {
+        await _recorder.stop();
+        debugPrint('PreAlertScreen: Audio recording stopped');
+        
+        if (_audioPath != null) {
+          final file = File(_audioPath!);
+          final bytes = await file.readAsBytes();
+          _audioBase64 = 'data:audio/mp4;base64,${base64Encode(bytes)}';
+          debugPrint('PreAlertScreen: Audio encoded to base64 (${_audioBase64!.length} chars)');
+          
+          // Clean up temp file
+          await file.delete();
+        }
+      }
+    } catch (e) {
+      debugPrint('PreAlertScreen: Error stopping/encoding audio: $e');
     }
   }
 
@@ -90,13 +141,29 @@ class _PreAlertScreenState extends State<PreAlertScreen> with TickerProviderStat
     HapticFeedback.vibrate();
   }
 
-  void _resolve(bool isSafe) {
+  void _resolve(bool isSafe) async {
     if (_resolved) return; // Prevent double resolution
     _resolved = true;
     _stopAlertSound();
+    await _stopAndEncodeAudio();
     debugPrint('PreAlertScreen: resolved isSafe=$isSafe');
     _timer?.cancel();
-    widget.request.resolveAsSafe(isSafe);
+    
+    // Pass audio base64 to background service if not safe
+    if (!isSafe && _audioBase64 != null) {
+      try {
+        FlutterBackgroundService().invoke('pre_alert_response', {
+          'isSafe': isSafe,
+          'audio_base64': _audioBase64,
+        });
+        debugPrint('PreAlertScreen: Sent audio to background service');
+      } catch (e) {
+        debugPrint('PreAlertScreen: Failed to send audio to background service: $e');
+      }
+    } else {
+      widget.request.resolveAsSafe(isSafe);
+    }
+    
     if (mounted) {
       Navigator.of(context).pop(isSafe);
     }

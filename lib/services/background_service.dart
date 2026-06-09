@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
@@ -12,6 +13,7 @@ import 'ai_telemetry_validator.dart';
 import 'alert_queue_service.dart';
 import 'api_client.dart';
 import 'alerts_service.dart';
+import 'audio_buffer_service.dart';
 import 'diagnostic_log_service.dart';
 import 'location_reporter.dart';
 import 'pre_alert_service.dart';
@@ -114,8 +116,11 @@ Future<bool> onIosBackground(ServiceInstance service) async {
 // Main Background Task
 @pragma('vm:entry-point')
 void onStart(ServiceInstance service) async {
+  debugPrint('BackgroundService: onStart called');
+  
   // Only available for flutter 3.0.0 and later
   DartPluginRegistrant.ensureInitialized();
+  debugPrint('BackgroundService: DartPluginRegistrant initialized');
 
   // Initialize Local Notifications for updates
   final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
@@ -129,13 +134,31 @@ void onStart(ServiceInstance service) async {
   );
 
   await flutterLocalNotificationsPlugin.initialize(initializationSettings);
+  debugPrint('BackgroundService: Local notifications initialized');
+
+  // NOTE: Audio recording cannot work in background isolate due to plugin limitations
+  // The record package requires main isolate access. We'll skip audio buffer for now.
+  debugPrint('BackgroundService: Skipping audio buffer (not supported in background isolate)');
 
   AudioPlayer? backgroundAudioPlayer;
 
   // Listen for confirmation response from UI (via background service IPC)
   Completer<bool>? confirmationCompleter;
+  String? _alertAudioBase64; // Store audio from UI
+  
   service.on('pre_alert_response').listen((event) {
     debugPrint('BackgroundService: received pre_alert_response: $event');
+    debugPrint('BackgroundService: event keys: ${event?.keys.toList()}');
+    
+    // Extract audio from the event if present FIRST
+    _alertAudioBase64 = event?['audio_base64'] as String?;
+    debugPrint('BackgroundService: _alertAudioBase64 extracted: ${_alertAudioBase64 != null ? "YES" : "NO"}');
+    
+    if (_alertAudioBase64 != null) {
+      debugPrint('BackgroundService: Received audio from UI (${_alertAudioBase64?.length ?? 0} chars)');
+    }
+    
+    // THEN complete the completer
     if (confirmationCompleter != null && !confirmationCompleter!.isCompleted) {
       final isSafe = event?['isSafe'] ?? false;
       confirmationCompleter!.complete(!isSafe); // shouldSend = !isSafe
@@ -290,6 +313,9 @@ void onStart(ServiceInstance service) async {
     // Start the periodic location reporter (15-min ticks). It is
     // self-contained and silently no-ops when there is no session.
     LocationReporter.start();
+
+    // NOTE: Audio buffer recording removed - record plugin doesn't work in background isolate
+    // Audio recording must be handled from main isolate when app is in foreground
   } catch (e) {
     debugPrint('Background API init failed: $e');
   }
@@ -555,6 +581,27 @@ void onStart(ServiceInstance service) async {
         debugPrint(
           'BackgroundService: User confirmed safe, alert cancelled.',
         );
+        debugPrint('BackgroundService: About to register false positive...');
+        // Register false positive when user confirms safe
+        try {
+          debugPrint('BackgroundService: Calling registerFalsoPositivo...');
+          await AlertsService(appApi).registerFalsoPositivo(
+            latitud: lastKnownPosition!.latitude,
+            longitud: lastKnownPosition!.longitude,
+            fechaHora: DateTime.now().toUtc(),
+          );
+          debugPrint('BackgroundService: registerFalsoPositivo completed');
+          await DiagnosticLogService.log(
+            category: 'incident',
+            event: 'false_positive_registered',
+            detail: 'lat=${lastKnownPosition!.latitude}, lng=${lastKnownPosition!.longitude}',
+            severity: 'info',
+          );
+          debugPrint('BackgroundService: False positive registered successfully');
+        } catch (e) {
+          debugPrint('BackgroundService: Failed to register false positive: $e');
+          debugPrint('BackgroundService: Error stack trace: ${StackTrace.current}');
+        }
         // Remove the critical notification if user confirmed safe
         await flutterLocalNotificationsPlugin.cancel(alertNotificationId);
         return;
@@ -563,6 +610,16 @@ void onStart(ServiceInstance service) async {
       // Generate a client event ID for deduplication.
       final eventId = _generateEventId();
 
+      // Use audio from UI if available
+      String? audioBytes;
+      if (_alertAudioBase64 != null) {
+        audioBytes = _alertAudioBase64;
+        debugPrint('BackgroundService: Using audio from UI (${audioBytes?.length ?? 0} chars)');
+        _alertAudioBase64 = null; // Clear after use
+      } else {
+        debugPrint('BackgroundService: No audio from UI, sending alert without audio');
+      }
+
       final payload = CreateIncidentAlertDto(
         latitud: lastKnownPosition!.latitude,
         longitud: lastKnownPosition!.longitude,
@@ -570,6 +627,7 @@ void onStart(ServiceInstance service) async {
         fechaHora: DateTime.now().toUtc(),
         esProactiva: true,
         clientEventId: eventId,
+        audioBytes: audioBytes != null ? base64Decode(audioBytes.split(',')[1]) : null,
       );
 
       try {
@@ -638,14 +696,10 @@ void onStart(ServiceInstance service) async {
       debugPrint(
         'BackgroundService: heartbeat location update for incident $incidentId',
       );
-      await AlertsService(appApi).updateAlert(
+      await AlertsService(appApi).updateAlertHeartbeat(
         incidentId,
-        UpdateIncidentAlertDto(
-          latitud: lastKnownPosition!.latitude,
-          longitud: lastKnownPosition!.longitude,
-          fechaHora: DateTime.now().toUtc(),
-          esProactiva: false, // Don't re-notify contacts
-        ),
+        lastKnownPosition!.latitude,
+        lastKnownPosition!.longitude,
       );
       DiagnosticLogService.logIncidentHeartbeat(alertId: incidentId);
     } catch (e) {

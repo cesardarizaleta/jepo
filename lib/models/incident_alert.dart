@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 
 import '../utils/geo_utils.dart';
@@ -6,8 +9,7 @@ import 'emergency_contact.dart';
 enum AlertStatus {
   pendiente,
   real,
-  falsoPositivo,
-  cancelada;
+  falsoPositivo;
 
   String get apiValue {
     switch (this) {
@@ -17,8 +19,6 @@ enum AlertStatus {
         return 'REAL';
       case AlertStatus.falsoPositivo:
         return 'FALSO_POSITIVO';
-      case AlertStatus.cancelada:
-        return 'CANCELADA';
     }
   }
 
@@ -30,8 +30,6 @@ enum AlertStatus {
         return 'Alerta real';
       case AlertStatus.falsoPositivo:
         return 'Falso positivo';
-      case AlertStatus.cancelada:
-        return 'Cancelada';
     }
   }
 
@@ -43,8 +41,6 @@ enum AlertStatus {
         return const Color(0xFFE53935);
       case AlertStatus.falsoPositivo:
         return const Color(0xFFFFB300);
-      case AlertStatus.cancelada:
-        return const Color(0xFF90A4AE);
     }
   }
 
@@ -56,8 +52,6 @@ enum AlertStatus {
         return Icons.warning_amber_rounded;
       case AlertStatus.falsoPositivo:
         return Icons.block_outlined;
-      case AlertStatus.cancelada:
-        return Icons.cancel_outlined;
     }
   }
 
@@ -66,9 +60,8 @@ enum AlertStatus {
       case 'REAL':
         return AlertStatus.real;
       case 'FALSO_POSITIVO':
-        return AlertStatus.falsoPositivo;
       case 'CANCELADA':
-        return AlertStatus.cancelada;
+        return AlertStatus.falsoPositivo;
       default:
         return AlertStatus.pendiente;
     }
@@ -160,6 +153,10 @@ class CreateIncidentAlertDto {
   /// event and only send one.
   final String? clientEventId;
 
+  /// Audio bytes from the 5-second buffer before impact detection.
+  /// Encoded as base64 string for JSON transmission.
+  final Uint8List? audioBytes;
+
   const CreateIncidentAlertDto({
     required this.latitud,
     required this.longitud,
@@ -168,6 +165,7 @@ class CreateIncidentAlertDto {
     required this.esProactiva,
     this.isManual = false,
     this.clientEventId,
+    this.audioBytes,
   });
 
   factory CreateIncidentAlertDto.fromJson(Map<String, dynamic> json) {
@@ -181,6 +179,9 @@ class CreateIncidentAlertDto {
       esProactiva: json['es_proactiva'] == true,
       isManual: json['is_manual'] == true,
       clientEventId: json['client_event_id']?.toString(),
+      audioBytes: json['audio_base64'] != null
+          ? base64Decode(json['audio_base64'] as String)
+          : null,
     );
   }
 
@@ -195,6 +196,8 @@ class CreateIncidentAlertDto {
       'is_manual': isManual,
       if (clientEventId != null && clientEventId!.isNotEmpty)
         'client_event_id': clientEventId,
+      if (audioBytes != null && audioBytes!.isNotEmpty)
+        'audio_base64': base64Encode(audioBytes!),
     };
   }
 }
@@ -236,14 +239,12 @@ class AlertMonthlyStats {
   final int total;
   final int reales;
   final int falsosPositivos;
-  final int canceladas;
 
   const AlertMonthlyStats({
     required this.mes,
     required this.total,
     required this.reales,
     required this.falsosPositivos,
-    required this.canceladas,
   });
 
   factory AlertMonthlyStats.fromJson(Map<String, dynamic> json) {
@@ -252,7 +253,6 @@ class AlertMonthlyStats {
       total: IncidentAlert._toInt(json['total']) ?? 0,
       reales: IncidentAlert._toInt(json['reales']) ?? 0,
       falsosPositivos: IncidentAlert._toInt(json['falsosPositivos']) ?? 0,
-      canceladas: IncidentAlert._toInt(json['canceladas']) ?? 0,
     );
   }
 }
@@ -261,7 +261,6 @@ class AlertMetrics {
   final int totalAlertas;
   final int alertasReales;
   final int falsosPositivos;
-  final int canceladas;
   final int pendientes;
   final double tasaFalsosPositivos;
   final double tasaAlertasReales;
@@ -273,7 +272,6 @@ class AlertMetrics {
     required this.totalAlertas,
     required this.alertasReales,
     required this.falsosPositivos,
-    required this.canceladas,
     required this.pendientes,
     required this.tasaFalsosPositivos,
     required this.tasaAlertasReales,
@@ -288,7 +286,6 @@ class AlertMetrics {
       totalAlertas: IncidentAlert._toInt(json['totalAlertas']) ?? 0,
       alertasReales: IncidentAlert._toInt(json['alertasReales']) ?? 0,
       falsosPositivos: IncidentAlert._toInt(json['falsosPositivos']) ?? 0,
-      canceladas: IncidentAlert._toInt(json['canceladas']) ?? 0,
       pendientes: IncidentAlert._toInt(json['pendientes']) ?? 0,
       tasaFalsosPositivos: IncidentAlert._toDouble(json['tasaFalsosPositivos']),
       tasaAlertasReales: IncidentAlert._toDouble(json['tasaAlertasReales']),
@@ -310,7 +307,6 @@ class AlertMetrics {
     totalAlertas: 0,
     alertasReales: 0,
     falsosPositivos: 0,
-    canceladas: 0,
     pendientes: 0,
     tasaFalsosPositivos: 0,
     tasaAlertasReales: 0,
