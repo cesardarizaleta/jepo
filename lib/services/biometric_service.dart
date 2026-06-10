@@ -6,7 +6,7 @@ import 'package:flutter/services.dart';
 class BiometricService {
   static final LocalAuthentication _auth = LocalAuthentication();
   static const _storage = FlutterSecureStorage(
-    aOptions: AndroidOptions(encryptedSharedPreferences: true),
+    aOptions: AndroidOptions(encryptedSharedPreferences: false),
   );
 
   static const String _keyBiometricEnabled = 'biometric_enabled';

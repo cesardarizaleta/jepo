@@ -121,7 +121,7 @@ class ApiClient {
   }) async {
     final client = http.Client();
     const storage = FlutterSecureStorage(
-      aOptions: AndroidOptions(encryptedSharedPreferences: true),
+      aOptions: AndroidOptions(encryptedSharedPreferences: false),
     );
 
     final config = await AppConfig.load(
@@ -149,9 +149,9 @@ class ApiClient {
       }
     } catch (e) {
       debugPrint('Failed to interact with secure storage during init: $e');
-      try {
-        await storage.deleteAll();
-      } catch (_) {}
+      // Do NOT call storage.deleteAll() here!
+      // Doing so destroys the access token stored by the main isolate
+      // if a background isolate encounters a temporary decryption/keyguard issue.
     }
 
     return ApiClient._(client, storage, config, config.baseUrl);
