@@ -40,7 +40,7 @@ class _PreAlertScreenState extends State<PreAlertScreen> with TickerProviderStat
     
     _startTimer();
     _triggerHapticFeedback();
-    _playAlertSound();
+    // In Option A, we do not play the alert sound immediately to record clean audio
     _notifyUIActive();
     _startAudioRecording();
     debugPrint('PreAlertScreen: SHOWN with ${widget.request.seconds}s countdown');
@@ -127,6 +127,12 @@ class _PreAlertScreenState extends State<PreAlertScreen> with TickerProviderStat
           if (_remainingSeconds > 0) {
             _remainingSeconds--;
             HapticFeedback.mediumImpact();
+            
+            // Option A: With 2 seconds remaining, stop recording and play the alarm sound
+            if (_remainingSeconds == 2) {
+              _stopAndEncodeAudio();
+              _playAlertSound();
+            }
           } else {
             _timer?.cancel();
             _resolve(false); // Alert will be sent
@@ -174,6 +180,7 @@ class _PreAlertScreenState extends State<PreAlertScreen> with TickerProviderStat
     _timer?.cancel();
     _pulseController.dispose();
     _stopAlertSound();
+    _recorder.dispose(); // Clean up audio recorder resources
     // Safety: if screen is disposed without resolution (e.g. system back nav),
     // resolve as unsafe so the alert still fires.
     if (!_resolved) {

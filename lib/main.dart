@@ -12,6 +12,7 @@ import 'services/auth_service.dart';
 import 'services/emergency_contacts_service.dart';
 import 'services/session_events.dart';
 import 'services/pre_alert_service.dart';
+import 'services/alerts_service.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:flutter_phone_direct_caller/flutter_phone_direct_caller.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
@@ -561,8 +562,19 @@ class _HomeScreenState extends State<HomeScreen> {
     if (mounted) setState(() => _loadingUser = false);
   }
 
-  void _shareLocation(BuildContext context) {
-    _shareRealLocation(context);
+  Future<void> _sendProtectedNotification(BuildContext context) async {
+    try {
+      AppToast.info(context, 'Enviando reporte de seguridad...');
+      await AlertsService(appApi).reportSafe();
+      if (context.mounted) {
+        AppToast.success(context, 'Reporte enviado: estás a salvo.');
+      }
+    } catch (e) {
+      debugPrint('Error sending reportSafe: $e');
+      if (context.mounted) {
+        AppToast.error(context, 'No se pudo enviar el reporte: $e');
+      }
+    }
   }
 
   Future<void> _shareRealLocation(BuildContext context) async {
@@ -908,9 +920,9 @@ class _HomeScreenState extends State<HomeScreen> {
                       .scale(curve: Curves.easeOutBack),
                   _buildMenuCard(
                         context,
-                        title: 'Compartir',
-                        icon: Icons.share_location,
-                        onTap: () => _shareLocation(context),
+                        title: 'Protegido',
+                        icon: Icons.local_hospital,
+                        onTap: () => _sendProtectedNotification(context),
                       )
                       .animate()
                       .fadeIn(delay: 500.ms)

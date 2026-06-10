@@ -126,4 +126,11 @@ class AlertsService {
       requiresAuth: true,
     );
   }
+
+  Future<void> reportSafe() async {
+    await api.postEnvelope(
+      '/api/alertas/protegido',
+      requiresAuth: true,
+    );
+  }
 }

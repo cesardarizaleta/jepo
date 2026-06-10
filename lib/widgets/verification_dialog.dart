@@ -141,13 +141,11 @@ class _VerificationDialogWidgetState extends State<VerificationDialogWidget> {
 
   @override
   Widget build(BuildContext context) {
-    final insets = MediaQuery.of(context).viewInsets;
-
     return Dialog(
       backgroundColor: Colors.transparent,
-      insetPadding: EdgeInsets.symmetric(
+      insetPadding: const EdgeInsets.symmetric(
         horizontal: 24,
-        vertical: 24 + insets.bottom,
+        vertical: 24,
       ),
       child: Container(
         padding: const EdgeInsets.all(24),
@@ -162,154 +160,156 @@ class _VerificationDialogWidgetState extends State<VerificationDialogWidget> {
             ),
           ],
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // ─── Header ───────────────────────────────────────────────
-            Row(
-              children: [
-                _WarnIconBadge(),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Verificar contacto',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w900,
-                          color: _textPrimary,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        widget.contactName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: _textPrimary.withValues(alpha: 0.7),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 18),
-            Text(
-              'Tu contacto recibió un código de 6 dígitos por WhatsApp. '
-              'Pídeselo y escríbelo aquí para activarlo.',
-              style: TextStyle(
-                fontSize: 13,
-                color: _textPrimary.withValues(alpha: 0.85),
-                height: 1.5,
-              ),
-            ),
-            const SizedBox(height: 20),
-
-            // ─── OTP input ────────────────────────────────────────────
-            NeumorphicTextField(
-              controller: _otpController,
-              hintText: '••••••',
-              icon: Icons.pin_outlined,
-              keyboardType: TextInputType.number,
-              maxLength: 6,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-            ),
-            const SizedBox(height: 20),
-
-            // ─── Confirm (primary) ────────────────────────────────────
-            SizedBox(
-              width: double.infinity,
-              child: NeumorphicButton(
-                onPressed: _isVerifying ? () {} : _handleConfirm,
-                color: _accent,
-                child: _isVerifying
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(
-                          color: Colors.white,
-                          strokeWidth: 2,
-                        ),
-                      )
-                    : const Text(
-                        'CONFIRMAR',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                          letterSpacing: 1.1,
-                        ),
-                      ),
-              ),
-            ),
-            const SizedBox(height: 12),
-
-            // ─── Resend (secondary, with countdown) ───────────────────
-            SizedBox(
-              width: double.infinity,
-              child: NeumorphicButton(
-                onPressed: (_isResending || _cooldownSeconds > 0)
-                    ? () {}
-                    : _handleResend,
-                child: _isResending
-                    ? const SizedBox(
-                        height: 18,
-                        width: 18,
-                        child: CircularProgressIndicator(
-                          color: _accent,
-                          strokeWidth: 2,
-                        ),
-                      )
-                    : Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.refresh,
-                            size: 16,
-                            color: _cooldownSeconds > 0
-                                ? _textPrimary.withValues(alpha: 0.5)
-                                : _accent,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // ─── Header ───────────────────────────────────────────────
+              Row(
+                children: [
+                  _WarnIconBadge(),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Verificar contacto',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w900,
+                            color: _textPrimary,
                           ),
-                          const SizedBox(width: 8),
-                          Text(
-                            _cooldownSeconds > 0
-                                ? 'Reenviar en ${_cooldownSeconds}s'
-                                : 'REENVIAR CÓDIGO',
-                            style: TextStyle(
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          widget.contactName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: _textPrimary.withValues(alpha: 0.7),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              Text(
+                'Tu contacto recibió un código de 6 dígitos por WhatsApp. '
+                'Pídeselo y escríbelo aquí para activarlo.',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: _textPrimary.withValues(alpha: 0.85),
+                  height: 1.5,
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // ─── OTP input ────────────────────────────────────────────
+              NeumorphicTextField(
+                controller: _otpController,
+                hintText: '••••••',
+                icon: Icons.pin_outlined,
+                keyboardType: TextInputType.number,
+                maxLength: 6,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              ),
+              const SizedBox(height: 20),
+
+              // ─── Confirm (primary) ────────────────────────────────────
+              SizedBox(
+                width: double.infinity,
+                child: NeumorphicButton(
+                  onPressed: _isVerifying ? () {} : _handleConfirm,
+                  color: _accent,
+                  child: _isVerifying
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : const Text(
+                          'CONFIRMAR',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                            letterSpacing: 1.1,
+                          ),
+                        ),
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // ─── Resend (secondary, with countdown) ───────────────────
+              SizedBox(
+                width: double.infinity,
+                child: NeumorphicButton(
+                  onPressed: (_isResending || _cooldownSeconds > 0)
+                      ? () {}
+                      : _handleResend,
+                  child: _isResending
+                      ? const SizedBox(
+                          height: 18,
+                          width: 18,
+                          child: CircularProgressIndicator(
+                            color: _accent,
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.refresh,
+                              size: 16,
                               color: _cooldownSeconds > 0
                                   ? _textPrimary.withValues(alpha: 0.5)
                                   : _accent,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 13,
-                              letterSpacing: 0.8,
                             ),
-                          ),
-                        ],
-                      ),
+                            const SizedBox(width: 8),
+                            Text(
+                              _cooldownSeconds > 0
+                                  ? 'Reenviar en ${_cooldownSeconds}s'
+                                  : 'REENVIAR CÓDIGO',
+                              style: TextStyle(
+                                color: _cooldownSeconds > 0
+                                    ? _textPrimary.withValues(alpha: 0.5)
+                                    : _accent,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                                letterSpacing: 0.8,
+                              ),
+                            ),
+                          ],
+                        ),
+                ),
               ),
-            ),
-            const SizedBox(height: 6),
+              const SizedBox(height: 6),
 
-            // ─── Close ────────────────────────────────────────────────
-            Center(
-              child: TextButton(
-                onPressed: () => Navigator.of(context).pop(false),
-                child: Text(
-                  'Verificar más tarde',
-                  style: TextStyle(
-                    color: _textPrimary.withValues(alpha: 0.7),
-                    fontWeight: FontWeight.w600,
-                    fontSize: 12,
+              // ─── Close ────────────────────────────────────────────────
+              Center(
+                child: TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: Text(
+                    'Verificar más tarde',
+                    style: TextStyle(
+                      color: _textPrimary.withValues(alpha: 0.7),
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                    ),
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

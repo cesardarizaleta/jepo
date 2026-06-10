@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 
 import '../models/incident_alert.dart';
+import '../models/user.dart';
 import '../services/api_client.dart';
 import '../services/metrics_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/app_toast.dart';
 import '../widgets/neumorphic_container.dart';
+import 'family_screen.dart';
 
 class AlertHistoryScreen extends StatefulWidget {
   const AlertHistoryScreen({super.key});
@@ -29,11 +31,28 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen> {
   DateTime? _filterDesde;
   DateTime? _filterHasta;
 
+  List<User> _familyMembers = [];
+  User? _selectedFamilyMember;
+
   @override
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
+    _loadFamilyMembers();
     _loadAll(refresh: true);
+  }
+
+  Future<void> _loadFamilyMembers() async {
+    try {
+      final members = await _metrics.getFamilyMembers();
+      if (mounted) {
+        setState(() {
+          _familyMembers = members;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error al cargar familiares: $e');
+    }
   }
 
   @override
@@ -55,7 +74,9 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen> {
       setState(() => _loading = true);
     }
     try {
-      final metricsFuture = _metrics.getMetrics();
+      final metricsFuture = _selectedFamilyMember == null
+          ? _metrics.getMetrics()
+          : _metrics.getFamilyMetrics(_selectedFamilyMember!.id!);
       if (refresh) {
         _currentPage = 1;
         _alerts.clear();
@@ -71,7 +92,9 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen> {
         AppToast.error(context, 'Error al cargar datos: $e');
       }
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) {
+        setState(() => _loading = false);
+      }
     }
   }
 
@@ -96,12 +119,20 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen> {
 
     try {
       final page = refresh ? 1 : _currentPage + 1;
-      final result = await _metrics.getHistorial(
-        pagina: page,
-        estado: _filterEstado?.apiValue,
-        desde: _filterDesde,
-        hasta: _filterHasta,
-      );
+      final result = _selectedFamilyMember == null
+          ? await _metrics.getHistorial(
+              pagina: page,
+              estado: _filterEstado?.apiValue,
+              desde: _filterDesde,
+              hasta: _filterHasta,
+            )
+          : await _metrics.getFamilyHistorial(
+              _selectedFamilyMember!.id!,
+              pagina: page,
+              estado: _filterEstado?.apiValue,
+              desde: _filterDesde,
+              hasta: _filterHasta,
+            );
 
       if (!mounted) return;
       setState(() {
@@ -341,6 +372,7 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen> {
                 controller: _scrollController,
                 physics: const AlwaysScrollableScrollPhysics(),
                 slivers: [
+                  SliverToBoxAdapter(child: _buildUserSelector()),
                   SliverToBoxAdapter(child: _buildMetricsSection()),
                   SliverToBoxAdapter(
                     child: Padding(
@@ -401,6 +433,61 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen> {
                 ],
               ),
             ),
+    );
+  }
+
+  Widget _buildUserSelector() {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      child: Row(
+        children: [
+          _FilterChip(
+            label: 'Yo',
+            isSelected: _selectedFamilyMember == null,
+            onTap: () {
+              if (_selectedFamilyMember != null) {
+                setState(() {
+                  _selectedFamilyMember = null;
+                });
+                _loadAll(refresh: true);
+              }
+            },
+          ),
+          ..._familyMembers.map((member) {
+            final name = member.nombre ?? 'Familiar';
+            return Padding(
+              padding: const EdgeInsets.only(left: 10),
+              child: _FilterChip(
+                label: name,
+                isSelected: _selectedFamilyMember?.id == member.id,
+                onTap: () {
+                  if (_selectedFamilyMember?.id != member.id) {
+                    setState(() {
+                      _selectedFamilyMember = member;
+                    });
+                    _loadAll(refresh: true);
+                  }
+                },
+              ),
+            );
+          }),
+          Padding(
+            padding: const EdgeInsets.only(left: 10),
+            child: _FilterChip(
+              label: '+ Vincular',
+              isSelected: false,
+              color: AppTheme.textLight,
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const FamilyScreen()),
+                ).then((_) => _loadFamilyMembers());
+              },
+            ),
+          ),
+        ],
+      ),
     );
   }
 
