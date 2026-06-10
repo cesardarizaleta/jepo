@@ -65,13 +65,13 @@ class _PreAlertScreenState extends State<PreAlertScreen> with TickerProviderStat
       }
 
       final tempDir = await getTemporaryDirectory();
-      _audioPath = '${tempDir.path}/alert_audio_${DateTime.now().millisecondsSinceEpoch}.m4a';
+      _audioPath = '${tempDir.path}/alert_audio_${DateTime.now().millisecondsSinceEpoch}.ogg';
       
       await _recorder.start(
         path: _audioPath,
-        encoder: AudioEncoder.aacLc,
-        bitRate: 128000,
-        samplingRate: 44100,
+        encoder: AudioEncoder.opus,
+        bitRate: 24000,
+        samplingRate: 16000,
       );
       debugPrint('PreAlertScreen: Audio recording started');
     } catch (e) {
@@ -88,7 +88,7 @@ class _PreAlertScreenState extends State<PreAlertScreen> with TickerProviderStat
         if (_audioPath != null) {
           final file = File(_audioPath!);
           final bytes = await file.readAsBytes();
-          _audioBase64 = 'data:audio/mp4;base64,${base64Encode(bytes)}';
+          _audioBase64 = 'data:audio/ogg;base64,${base64Encode(bytes)}';
           debugPrint('PreAlertScreen: Audio encoded to base64 (${_audioBase64!.length} chars)');
           
           // Clean up temp file
