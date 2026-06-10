@@ -25,6 +25,7 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   User? _user;
   bool _loading = true;
+  bool _loadingMetrics = true;
   AlertMetrics _metrics = AlertMetrics.empty;
 
   @override
@@ -34,26 +35,61 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _loadUser() async {
-    setState(() => _loading = true);
-    try {
-      final svc = AuthService(appApi);
-      final metricsSvc = MetricsService(appApi);
-      final local = await svc.getCurrentUser();
-      if (local != null) {
-        _user = local;
-      } else {
-        final me = await svc.me();
-        if (me != null) _user = me;
+    final svc = AuthService(appApi);
+    final metricsSvc = MetricsService(appApi);
+
+    // 1. Get cached user from SharedPreferences immediately to avoid blocking the UI
+    final local = await svc.getCurrentUser();
+    if (local != null) {
+      if (mounted) {
+        setState(() {
+          _user = local;
+          _loading = false;
+        });
       }
-      try {
-        _metrics = await metricsSvc.getMetrics();
-      } catch (e) {
-        debugPrint('Metrics load failed: $e');
+    } else {
+      // If there's no cached user, we show the full screen loading spinner
+      if (mounted) {
+        setState(() {
+          _loading = true;
+        });
+      }
+    }
+
+    // 2. Fetch fresh user data and metrics in the background
+    try {
+      final me = await svc.me();
+      if (me != null && mounted) {
+        setState(() {
+          _user = me;
+        });
       }
     } catch (e) {
-      debugPrint('Profile load failed: $e');
+      debugPrint('Background user refresh failed: $e');
     }
-    if (mounted) setState(() => _loading = false);
+
+    try {
+      final freshMetrics = await metricsSvc.getMetrics();
+      if (mounted) {
+        setState(() {
+          _metrics = freshMetrics;
+          _loadingMetrics = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Background metrics load failed: $e');
+      if (mounted) {
+        setState(() {
+          _loadingMetrics = false;
+        });
+      }
+    }
+
+    if (mounted) {
+      setState(() {
+        _loading = false;
+      });
+    }
   }
 
   @override
@@ -273,14 +309,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 ),
                 const SizedBox(height: 4),
-                Text(
-                  '${_metrics.totalAlertas} alertas · '
-                  '${_metrics.tasaFalsosPositivos.toStringAsFixed(1)}% falsos positivos',
-                  style: const TextStyle(
-                    fontSize: 13,
-                    color: AppTheme.textLight,
-                  ),
-                ),
+                _loadingMetrics
+                    ? const Padding(
+                        padding: EdgeInsets.only(top: 4.0),
+                        child: SizedBox(
+                          width: 12,
+                          height: 12,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 1.5,
+                            valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primary),
+                          ),
+                        ),
+                      )
+                    : Text(
+                        '${_metrics.totalAlertas} alertas · '
+                        '${_metrics.tasaFalsosPositivos.toStringAsFixed(1)}% falsos positivos',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: AppTheme.textLight,
+                        ),
+                      ),
               ],
             ),
           ),
