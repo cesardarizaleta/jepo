@@ -493,34 +493,38 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen> {
 
   Widget _buildMetricsSection() {
     return Padding(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'Métricas',
+            'Resumen de Rendimiento',
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.w600,
               color: AppTheme.textDark,
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
           Row(
             children: [
               Expanded(
                 child: _MetricCard(
-                  label: 'Total',
+                  label: 'Total Alertas',
                   value: '${_metricsData.totalAlertas}',
                   color: AppTheme.primary,
+                  icon: Icons.campaign_outlined,
+                  explanation: 'Historial total de incidencias reportadas',
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: _MetricCard(
-                  label: 'Reales',
+                  label: 'Casos Reales',
                   value: '${_metricsData.alertasReales}',
-                  color: AlertStatus.real.color,
+                  color: const Color(0xFFE53935),
+                  icon: Icons.warning_amber_rounded,
+                  explanation: 'Incidencias de peligro real confirmadas',
                 ),
               ),
             ],
@@ -530,27 +534,30 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen> {
             children: [
               Expanded(
                 child: _MetricCard(
-                  label: 'Falsos +',
+                  label: 'Falsos Positivos',
                   value: '${_metricsData.falsosPositivos}',
-                  color: AlertStatus.falsoPositivo.color,
+                  color: const Color(0xFFFFB300),
+                  icon: Icons.check_circle_outline,
+                  explanation: 'Alertas canceladas o de prueba',
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: _MetricCard(
-                  label: 'Tasa FP',
-                  value:
-                      '${_metricsData.tasaFalsosPositivos.toStringAsFixed(1)}%',
-                  color: AlertStatus.falsoPositivo.color,
+                  label: 'Tasa Falsos',
+                  value: '${_metricsData.tasaFalsosPositivos.toStringAsFixed(1)}%',
+                  color: const Color(0xFF42A5F5),
+                  icon: Icons.percent,
+                  explanation: 'Porcentaje de alertas que fueron falsas',
                 ),
               ),
             ],
           ),
           const SizedBox(height: 20),
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                flex: 2,
                 child: NeumorphicContainer(
                   useAnimation: false,
                   padding: const EdgeInsets.all(16),
@@ -558,15 +565,23 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
-                        'Alertas por mes',
+                        'Histórico Mensual',
                         style: TextStyle(
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
                           color: AppTheme.textDark,
+                        ),
+                      ),
+                      const Text(
+                        'Alertas reales vs falsos positivos',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: AppTheme.textLight,
                         ),
                       ),
                       const SizedBox(height: 12),
                       SizedBox(
-                        height: 140,
+                        height: 100,
                         child: _MonthlyBarChart(
                           data: _metricsData.alertasPorMes,
                         ),
@@ -576,38 +591,60 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen> {
                 ),
               ),
               const SizedBox(width: 16),
-              NeumorphicContainer(
-                useAnimation: false,
-                padding: const EdgeInsets.all(12),
-                child: SizedBox(
-                  width: 90,
-                  height: 90,
-                  child: CustomPaint(
-                    painter: _AccuracyRingPainter(
-                      accuracy: _metricsData.tasaAlertasReales,
-                    ),
-                    child: Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            '${_metricsData.tasaAlertasReales.toStringAsFixed(0)}%',
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: AppTheme.textDark,
-                            ),
-                          ),
-                          const Text(
-                            'Precisión',
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: AppTheme.textLight,
-                            ),
-                          ),
-                        ],
+              Expanded(
+                child: NeumorphicContainer(
+                  useAnimation: false,
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    children: [
+                      const Text(
+                        'Precisión Jepo',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                          color: AppTheme.textDark,
+                        ),
                       ),
-                    ),
+                      const Text(
+                        'Porcentaje de efectividad',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: AppTheme.textLight,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: 100,
+                        height: 100,
+                        child: CustomPaint(
+                          painter: _AccuracyRingPainter(
+                            accuracy: _metricsData.tasaAlertasReales,
+                          ),
+                          child: Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  '${_metricsData.tasaAlertasReales.toStringAsFixed(0)}%',
+                                  style: const TextStyle(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppTheme.textDark,
+                                  ),
+                                ),
+                                const Text(
+                                  'Precisión',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: AppTheme.textLight,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -684,11 +721,15 @@ class _MetricCard extends StatelessWidget {
   final String label;
   final String value;
   final Color color;
+  final IconData icon;
+  final String explanation;
 
   const _MetricCard({
     required this.label,
     required this.value,
     required this.color,
+    required this.icon,
+    required this.explanation,
   });
 
   @override
@@ -699,17 +740,43 @@ class _MetricCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(icon, size: 20, color: color),
+              ),
+              Text(
+                value,
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: color,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
           Text(
             label,
-            style: const TextStyle(color: AppTheme.textLight, fontSize: 13),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 22,
+            style: const TextStyle(
+              fontSize: 14,
               fontWeight: FontWeight.bold,
-              color: color,
+              color: AppTheme.textDark,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            explanation,
+            style: const TextStyle(
+              fontSize: 10,
+              color: AppTheme.textLight,
+              height: 1.2,
             ),
           ),
         ],
@@ -762,7 +829,7 @@ class _MonthlyBarChart extends StatelessWidget {
     final display = data.length > 6 ? data.sublist(data.length - 6) : data;
 
     return CustomPaint(
-      size: const Size(double.infinity, 140),
+      size: const Size(double.infinity, 100),
       painter: _MonthlyBarChartPainter(months: display),
     );
   }
