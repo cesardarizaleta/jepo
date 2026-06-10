@@ -11,6 +11,7 @@ import 'edit_profile_screen.dart';
 import 'notifications_settings_screen.dart';
 import 'privacy_policy_screen.dart';
 import 'help_screen.dart';
+import 'tutorial_screen.dart';
 import '../theme/app_theme.dart';
 import '../widgets/neumorphic_container.dart';
 
@@ -180,6 +181,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       context,
                       MaterialPageRoute(
                         builder: (_) => const PrivacyPolicyScreen(),
+                      ),
+                    ),
+                  ),
+                  _buildProfileOption(
+                    context,
+                    'Tutorial de Jepo',
+                    Icons.menu_book_outlined,
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const TutorialScreen(),
                       ),
                     ),
                   ),
