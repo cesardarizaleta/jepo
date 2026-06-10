@@ -303,21 +303,18 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen> {
                     SizedBox(
                       width: double.infinity,
                       height: 52,
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppTheme.primary,
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                        ),
+                      child: NeumorphicButton(
+                        color: AppTheme.primary,
+                        borderRadius: 16,
                         onPressed: () => Navigator.pop(ctx, true),
-                        child: const Text(
-                          'Aplicar filtros',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
+                        child: const Center(
+                          child: Text(
+                            'Aplicar filtros',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
                           ),
                         ),
                       ),
@@ -348,16 +345,28 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen> {
       appBar: AppBar(
         title: const Text(
           'Historial y Métricas',
-          style: TextStyle(color: AppTheme.textDark),
+          style: TextStyle(color: AppTheme.textDark, fontWeight: FontWeight.bold),
         ),
         backgroundColor: Colors.transparent,
         elevation: 0,
         iconTheme: const IconThemeData(color: AppTheme.textDark),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.filter_list),
-            onPressed: _showFilters,
-            tooltip: 'Filtros',
+          Padding(
+            padding: const EdgeInsets.only(right: 16, top: 8, bottom: 8),
+            child: SizedBox(
+              width: 40,
+              height: 40,
+              child: NeumorphicButton(
+                padding: EdgeInsets.zero,
+                borderRadius: 12,
+                onPressed: _showFilters,
+                child: const Icon(
+                  Icons.filter_list,
+                  color: AppTheme.textDark,
+                  size: 20,
+                ),
+              ),
+            ),
           ),
         ],
       ),
@@ -376,21 +385,41 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen> {
                   SliverToBoxAdapter(child: _buildMetricsSection()),
                   SliverToBoxAdapter(
                     child: Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+                      padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
                       child: Row(
                         children: [
+                          Container(
+                            width: 4,
+                            height: 18,
+                            decoration: BoxDecoration(
+                              color: AppTheme.primary,
+                              borderRadius: BorderRadius.circular(2),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
                           const Text(
-                            'Historial',
+                            'Historial de Alertas',
                             style: TextStyle(
                               fontSize: 18,
-                              fontWeight: FontWeight.w600,
+                              fontWeight: FontWeight.bold,
                               color: AppTheme.textDark,
                             ),
                           ),
                           const Spacer(),
-                          Text(
-                            '${_metricsData.totalAlertas} alertas',
-                            style: const TextStyle(color: AppTheme.textLight),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: AppTheme.textLight.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              '${_metricsData.totalAlertas} alertas',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: AppTheme.textLight,
+                              ),
+                            ),
                           ),
                         ],
                       ),
@@ -667,10 +696,10 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen> {
               width: 44,
               height: 44,
               decoration: BoxDecoration(
-                color: alert.estado.color.withValues(alpha: 0.15),
+                color: alert.estado.color.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Icon(alert.estado.icon, color: alert.estado.color),
+              child: Icon(alert.estado.icon, color: alert.estado.color, size: 22),
             ),
             const SizedBox(width: 14),
             Expanded(
@@ -680,17 +709,28 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen> {
                   Text(
                     _formatDateTime(alert.fechaHora),
                     style: const TextStyle(
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
                       color: AppTheme.textDark,
                     ),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    alert.esProactiva ? 'Proactiva' : 'Manual',
-                    style: const TextStyle(
-                      fontSize: 13,
-                      color: AppTheme.textLight,
-                    ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Icon(
+                        alert.esProactiva ? Icons.sensors_outlined : Icons.touch_app_outlined,
+                        size: 13,
+                        color: AppTheme.textLight,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        alert.esProactiva ? 'Detec. Proactiva' : 'SOS Manual',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppTheme.textLight,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -959,29 +999,23 @@ class _FilterChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final activeColor = color ?? AppTheme.primary;
     return GestureDetector(
       onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
+      child: NeumorphicContainer(
+        useAnimation: false,
+        isPressed: isSelected,
+        borderRadius: 20,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? (color ?? AppTheme.primary).withValues(alpha: 0.15)
-              : AppTheme.textLight.withValues(alpha: 0.05),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: isSelected
-                ? (color ?? AppTheme.primary)
-                : AppTheme.textLight.withValues(alpha: 0.2),
-            width: 1.5,
-          ),
-        ),
+        color: isSelected
+            ? activeColor.withValues(alpha: 0.08)
+            : AppTheme.background,
         child: Text(
           label,
           style: TextStyle(
             fontSize: 14,
-            fontWeight: FontWeight.w600,
-            color: isSelected ? (color ?? AppTheme.primary) : AppTheme.textLight,
+            fontWeight: FontWeight.bold,
+            color: isSelected ? activeColor : AppTheme.textLight,
           ),
         ),
       ),
@@ -1004,27 +1038,23 @@ class _DateButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      child: Container(
+      child: NeumorphicContainer(
+        useAnimation: false,
+        isPressed: date != null,
+        borderRadius: 12,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        decoration: BoxDecoration(
-          color: AppTheme.textLight.withValues(alpha: 0.05),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: date != null
-                ? AppTheme.primary
-                : AppTheme.textLight.withValues(alpha: 0.2),
-            width: 1.5,
-          ),
-        ),
+        color: date != null
+            ? AppTheme.primary.withValues(alpha: 0.05)
+            : AppTheme.background,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               label,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 11,
-                fontWeight: FontWeight.w500,
-                color: AppTheme.textLight,
+                fontWeight: FontWeight.bold,
+                color: date != null ? AppTheme.primary : AppTheme.textLight,
               ),
             ),
             const SizedBox(height: 4),
@@ -1032,7 +1062,7 @@ class _DateButton extends StatelessWidget {
               date != null ? _formatDate(date!) : 'Seleccionar',
               style: TextStyle(
                 fontSize: 14,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.bold,
                 color: date != null ? AppTheme.textDark : AppTheme.textLight,
               ),
             ),
